@@ -4,7 +4,7 @@ import Clock from '@/components/HUD/Clock';
 import Timer from '@/components/HUD/Timer';
 import DraggablePanel from '@/components/Layout/DraggablePanel';
 import { useState, useEffect } from 'react';
-import { CheckSquare, StickyNote, Settings, History, Play, AlertCircle, Maximize, Minimize, Brain, Coffee, Zap, Layers, Droplets, Link as LinkIcon, Plus, Trash2, Globe, ExternalLink, Upload, FileText, ArrowUp, ArrowDown, ArrowDownAZ, Bell, Eye, EyeOff } from 'lucide-react';
+import { CheckSquare, StickyNote, Settings, History, Play, AlertCircle, Maximize, Minimize, Brain, Coffee, Zap, Layers, Droplets, Link as LinkIcon, Plus, Trash2, Globe, ExternalLink, Upload, FileText, ArrowUp, ArrowDown, ArrowDownAZ, Bell, Eye, EyeOff, MousePointer2, Lock } from 'lucide-react';
 
 const DEFAULT_VIDEO_ID = 'playlist:PL8ltyl0rAtoO4vZiGROGEflYt487oUJnA'; // Default Lofi Playlist
 
@@ -28,6 +28,8 @@ export default function SplitView() {
     const [blur, setBlur] = useState(16); // 0-40px
     const [showQuickLinks, setShowQuickLinks] = useState(false);
     const [uiHidden, setUiHidden] = useState(false);
+    const [orientation, setOrientation] = useState<'auto' | 'horizontal' | 'vertical'>('auto');
+    const [videoInteractive, setVideoInteractive] = useState(false);
 
     // Quick Links Data
     const [quickLinks, setQuickLinks] = useState<QuickLink[]>([
@@ -297,16 +299,39 @@ export default function SplitView() {
     if (!isMounted) return null;
 
     // Approximate default positions
+    // Orientation Logic
+    const isAuto = orientation === 'auto';
+    const isHorizontal = orientation === 'horizontal';
+    const isVertical = orientation === 'vertical';
+
+    const hudClasses = `flex items-center transition-all ${isHorizontal ? 'flex-row gap-12 p-8' :
+        isVertical ? 'flex-col gap-6 p-6 pt-2' :
+            'flex-col lg:flex-row gap-6 lg:gap-12 p-6 lg:p-8 pt-2 lg:pt-8'
+        }`;
+
+    const getDockClasses = (isMainDock: boolean) => {
+        const baseClasses = "flex items-center justify-center p-2 transition-all";
+        const widthClasses = orientation === 'vertical' ? 'w-auto lg:w-16' : (orientation === 'horizontal' ? 'w-full lg:w-auto' : 'w-full lg:w-16');
+        const flexClasses = orientation === 'vertical' ? 'flex-col' : (orientation === 'horizontal' ? 'flex-row' : 'flex-row lg:flex-col');
+
+        return {
+            wrapper: `flex flex-col items-center ${orientation === 'vertical' ? 'w-full lg:w-16' : (orientation === 'horizontal' ? 'w-full lg:w-auto' : 'w-full lg:w-16')}`,
+            inner: `${baseClasses} ${flexClasses} ${orientation === 'vertical' ? 'gap-2' : (orientation === 'horizontal' ? 'gap-2 lg:gap-4' : 'gap-2 lg:gap-2')}`
+        };
+    };
+
+
+
+    // Approximate default positions
     const initialHUDPos = { x: '50%', y: '50%' };
-    const initialDockPos = { x: '95%', y: '50%' };
-    const initialLinksPos = { x: '5%', y: '50%' };
 
     return (
-        <div className="h-screen w-screen bg-black overflow-hidden relative text-white flex flex-col md:block overflow-y-auto md:overflow-hidden">
+        <div className="h-[100dvh] w-screen bg-black overflow-hidden relative text-white flex flex-col lg:block overflow-y-auto lg:overflow-hidden">
             {/* Background Video */}
-            <div className="absolute inset-0 z-0 bg-black flex items-center justify-center pointer-events-none">
+            <div className="absolute inset-0 z-0 bg-black flex items-center justify-center">
+                {/* 1. Underlying Iframe */}
                 <iframe
-                    className="w-full h-full pointer-events-auto"
+                    className={`w-full h-full transition-all duration-500 ${videoInteractive ? 'pointer-events-auto scale-100' : 'pointer-events-none scale-[1.02] blur-[2px]'}`}
                     src={videoId.startsWith('playlist:')
                         ? `https://www.youtube.com/embed?listType=playlist&list=${videoId.split(':')[1]}&autoplay=1&mute=0&controls=1&showinfo=0&rel=0&loop=1`
                         : `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&controls=1&showinfo=0&rel=0&loop=1&playlist=${videoId}`
@@ -315,133 +340,136 @@ export default function SplitView() {
                     allow="autoplay; encrypted-media; loop"
                     allowFullScreen
                 />
-                <div className="absolute inset-0 bg-black/20 pointer-events-none" />
+
+                {/* 2. Interaction Capture Overlay (Only active when NOT interactive) */}
+                {!videoInteractive && (
+                    <div
+                        className="absolute inset-0 z-10 cursor-pointer pointer-events-auto hover:bg-white/5 transition-colors group flex items-center justify-center"
+                        onClick={() => setVideoInteractive(true)}
+                    >
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-xl px-6 py-3 rounded-2xl border border-white/10 flex items-center gap-3">
+                            <MousePointer2 size={20} className="text-white/70" />
+                            <span className="text-sm font-medium">Click to interact with video</span>
+                        </div>
+                    </div>
+                )}
+
+                {/* 3. Global Dimmer */}
+                <div className="absolute inset-0 bg-black/20 pointer-events-none z-20" />
             </div>
 
             {/* Content Container */}
-            <div className="relative z-10 w-full min-h-screen flex flex-col md:block p-4 md:p-0 pointer-events-none">
+            <div className="relative z-10 w-full min-h-[100dvh] flex flex-col items-center lg:block p-2 lg:p-0 pointer-events-none">
 
-                {/* Draggable HUD Block */}
-                <DraggablePanel id="hud_block" initialPosition={initialHUDPos} transparency={transparency} blur={blur} className={`transition-opacity duration-700 ${uiHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                    <div className="flex flex-col items-center gap-6 p-6 pt-2">
-                        <Clock />
-                        <Timer durations={durations} longBreakInterval={longBreakInterval} notificationsEnabled={notificationsEnabled} />
+                {/* Unified Zen Hub */}
+                <DraggablePanel id="zen_hub" initialPosition={initialHUDPos} transparency={transparency} blur={blur} className={`pointer-events-auto transition-opacity duration-700 ${uiHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                    <div className="flex flex-col items-center">
+                        {/* 1. HUD Area (Clock & Timer) */}
+                        <div className={hudClasses}>
+                            <Clock />
+                            <Timer durations={durations} longBreakInterval={longBreakInterval} notificationsEnabled={notificationsEnabled} orientation={orientation} />
+                        </div>
+
+                        {/* 2. Quick Links Area (Integrated) */}
+                        {showQuickLinks && quickLinks.length > 0 && !uiHidden && (
+                            <div className="w-full border-t border-white/5 py-3 px-4 lg:px-8 flex flex-wrap justify-center gap-3 bg-white/[0.02]">
+                                {quickLinks.map(link => (
+                                    <a
+                                        key={link.id}
+                                        href={link.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-1.5 hover:bg-white/10 rounded-lg transition-all hover:scale-110 group relative"
+                                        title={link.title}
+                                    >
+                                        <div className="w-5 h-5 rounded overflow-hidden flex items-center justify-center">
+                                            <img
+                                                src={`https://www.google.com/s2/favicons?domain=${link.url}&sz=32`}
+                                                alt={link.title}
+                                                className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity"
+                                                onError={(e) => {
+                                                    (e.target as HTMLImageElement).style.display = 'none';
+                                                    (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                                                }}
+                                            />
+                                            <Globe size={14} className="hidden absolute text-white/40" />
+                                        </div>
+                                    </a>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* 3. Controls Area (Merged Dock) */}
+                        {!uiHidden && (
+                            <div className="w-full border-t border-white/10 bg-white/5 py-3 lg:py-4 px-4 lg:px-8 flex items-center justify-center rounded-b-3xl">
+                                {/* Settings & Toggles Row */}
+                                <div className="flex flex-wrap items-center justify-center gap-3 lg:gap-4">
+                                    {/* Fullscreen Toggle */}
+                                    <button
+                                        onClick={toggleFullscreen}
+                                        className="p-2 hover:bg-white/10 rounded-xl transition-all group relative text-white/50 hover:text-white"
+                                    >
+                                        {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+                                    </button>
+
+                                    {/* Settings Toggle */}
+                                    <button
+                                        onClick={() => setShowSettings(!showSettings)}
+                                        className="p-2 hover:bg-white/10 rounded-xl transition-all group relative text-white/50 hover:text-white"
+                                    >
+                                        <Settings size={20} className={`transition-transform duration-500 ${showSettings ? 'rotate-90' : 'group-hover:rotate-45'}`} />
+                                    </button>
+
+                                    {/* Video Interaction Toggle */}
+                                    {/* <button
+                                        onClick={() => setVideoInteractive(!videoInteractive)}
+                                        className={`p-2 rounded-xl transition-all group relative ${videoInteractive ? 'bg-white/20 text-white shadow-lg' : 'hover:bg-white/10 text-white/50 hover:text-white'}`}
+                                        title={videoInteractive ? "Lock Video Focus" : "Unlock Video Focus"}
+                                    >
+                                        {videoInteractive ? <MousePointer2 size={20} /> : <Lock size={20} />}
+                                    </button> */}
+
+                                    {/* Divider */}
+                                    <div className="h-4 w-px bg-white/10" />
+
+                                    {/* App Links */}
+                                    <a
+                                        href="https://tasks.google.com/tasks/"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-2 hover:bg-white/10 rounded-xl transition-all group relative text-white/50 hover:text-white"
+                                        title="Google Tasks"
+                                    >
+                                        <CheckSquare size={20} />
+                                    </a>
+
+                                    <a
+                                        href="https://keep.google.com"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-2 hover:bg-white/10 rounded-xl transition-all group relative text-white/50 hover:text-white"
+                                        title="Google Keep"
+                                    >
+                                        <StickyNote size={20} />
+                                    </a>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </DraggablePanel>
 
-                {/* Draggable Controls Dock */}
-                <DraggablePanel id="controls_dock" initialPosition={initialDockPos} className="w-full md:w-16 flex flex-col items-center" transparency={uiHidden ? 0 : transparency} blur={uiHidden ? 0 : blur}>
-                    <div className="flex flex-row md:flex-col gap-4 md:gap-2 p-4 md:p-2 md:pt-0 w-full items-center justify-center">
-                        {/* Hide UI Toggle */}
-                        <button
-                            onClick={() => setUiHidden(!uiHidden)}
-                            className="p-3 hover:bg-white/10 rounded-xl transition-all group relative text-white/50 hover:text-white"
-                        >
-                            {uiHidden ? <Eye size={24} /> : <EyeOff size={24} />}
-                            <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-black/80 backdrop-blur px-2 py-1 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-white/10">
-                                {uiHidden ? "Show UI" : "Hide UI"}
-                            </div>
-                        </button>
+                {/* Floating Hide UI Toggle (Always available) */}
+                <div className={`fixed bottom-8 right-8 z-50 pointer-events-auto transition-all duration-500 ${uiHidden ? 'opacity-100' : 'opacity-40 hover:opacity-100'}`}>
+                    <button
+                        onClick={() => setUiHidden(!uiHidden)}
+                        className="p-4 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-white shadow-2xl hover:scale-110 active:scale-95 transition-all"
+                        title={uiHidden ? "Show UI" : "Hide UI"}
+                    >
+                        {uiHidden ? <Eye size={24} /> : <EyeOff size={24} />}
+                    </button>
+                </div>
 
-                        <div className={`flex flex-row md:flex-col gap-4 md:gap-2 items-center w-full transition-all duration-500 ${uiHidden ? 'hidden' : 'flex'}`}>
-                            {/* Fullscreen Toggle */}
-                            <button
-                                onClick={toggleFullscreen}
-                                className="p-3 hover:bg-white/10 rounded-xl transition-all group relative"
-                            >
-                                {isFullscreen ? <Minimize size={24} /> : <Maximize size={24} />}
-                                <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-black/80 backdrop-blur px-2 py-1 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-white/10">
-                                    {isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
-                                </div>
-                            </button>
 
-                            {/* Settings Toggle */}
-                            <div className="relative">
-                                <button
-                                    onClick={() => setShowSettings(!showSettings)}
-                                    className="p-3 hover:bg-white/10 rounded-xl transition-all group relative"
-                                >
-                                    <Settings size={24} className={`transition-transform duration-500 ${showSettings ? 'rotate-90' : 'group-hover:rotate-45'}`} />
-                                    <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-black/80 backdrop-blur px-2 py-1 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-white/10">
-                                        Settings
-                                    </div>
-                                </button>
-                            </div>
-
-                            {/* Divider */}
-                            <div className="h-8 w-px md:h-px md:w-8 bg-white/10 my-1 mx-2 md:mx-0" />
-
-                            {/* Tasks Button */}
-                            <a
-                                href="https://tasks.google.com/tasks/"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-3 hover:bg-white/10 rounded-xl transition-all group relative"
-                            >
-                                <CheckSquare size={24} />
-                                <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-black/80 backdrop-blur px-2 py-1 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-white/10">
-                                    Google Tasks
-                                </div>
-                            </a>
-
-                            {/* Keep Button */}
-                            <a
-                                href="https://keep.google.com"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-3 hover:bg-white/10 rounded-xl transition-all group relative"
-                            >
-                                <StickyNote size={24} />
-                                <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-black/80 backdrop-blur px-2 py-1 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-white/10">
-                                    Google Keep
-                                </div>
-                            </a>
-                        </div>
-                    </div>
-                </DraggablePanel>
-
-                {/* NEW: Quick Links Dock */}
-                {showQuickLinks && (
-                    <DraggablePanel id="quick_links_dock" initialPosition={initialLinksPos} className={`w-full md:w-16 flex flex-col items-center transition-opacity duration-700 ${uiHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'}`} transparency={transparency} blur={blur}>
-                        <div className="flex flex-row md:flex-col gap-3 p-4 md:p-2 md:pt-0 w-full items-center justify-center flex-wrap">
-                            {quickLinks.map(link => (
-                                <a
-                                    key={link.id}
-                                    href={link.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="p-2 hover:bg-white/15 rounded-xl transition-all hover:scale-110 group relative"
-                                >
-                                    {/* Favicon or Fallback */}
-                                    <div className="w-6 h-6 rounded overflow-hidden bg-white/10 flex items-center justify-center">
-                                        <img
-                                            src={`https://www.google.com/s2/favicons?domain=${link.url}&sz=32`}
-                                            alt={link.title}
-                                            className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
-                                            onError={(e) => {
-                                                (e.target as HTMLImageElement).style.display = 'none';
-                                                (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
-                                            }}
-                                        />
-                                        <Globe size={16} className="hidden absolute text-white/70" />
-                                    </div>
-
-                                    {/* Tooltip */}
-                                    <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 bg-black/80 backdrop-blur px-2 py-1 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-white/10">
-                                        {link.title}
-                                    </div>
-                                </a>
-                            ))}
-
-                            {/* Fallback add hint if empty */}
-                            {quickLinks.length === 0 && (
-                                <button onClick={() => setShowSettings(true)} className="p-2 rounded-xl text-white/20 hover:text-white/50">
-                                    <Plus size={20} />
-                                </button>
-                            )}
-                        </div>
-                    </DraggablePanel>
-                )}
 
             </div>
 
@@ -500,6 +528,22 @@ export default function SplitView() {
                                         className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400"
                                     />
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* HUD Layout Setting */}
+                        <div className="mb-8">
+                            <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-white/50 border-b border-white/10 pb-2">HUD Layout</h3>
+                            <div className="flex gap-2 bg-white/5 p-1 rounded-xl">
+                                {(['auto', 'horizontal', 'vertical'] as const).map((mode) => (
+                                    <button
+                                        key={mode}
+                                        onClick={() => setOrientation(mode)}
+                                        className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all capitalize ${orientation === mode ? 'bg-white/10 text-white shadow-lg' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                                    >
+                                        {mode}
+                                    </button>
+                                ))}
                             </div>
                         </div>
 

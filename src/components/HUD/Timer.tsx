@@ -12,9 +12,10 @@ interface TimerProps {
     };
     longBreakInterval: number;
     notificationsEnabled: boolean;
+    orientation?: 'auto' | 'horizontal' | 'vertical';
 }
 
-export default function Timer({ durations, longBreakInterval, notificationsEnabled }: TimerProps) {
+export default function Timer({ durations, longBreakInterval, notificationsEnabled, orientation = 'auto' }: TimerProps) {
     const [timerState, setTimerState] = useLocalStorage<{
         isRunning: boolean;
         endTime: number | null;
@@ -236,58 +237,17 @@ export default function Timer({ durations, longBreakInterval, notificationsEnabl
         return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     };
 
-    const CurrentIcon = MODES[timerState.mode].icon;
     const currentColor = MODES[timerState.mode].color;
 
+    // Calculate if we should force side-by-side or stack
+    const isHorizontal = orientation === 'horizontal';
+    const isVertical = orientation === 'vertical';
+
     return (
-        <div className="flex flex-col items-center justify-center w-full max-w-sm relative">
+        <div className={`flex items-center justify-center gap-6 lg:gap-10 p-2 transition-all ${isHorizontal ? 'flex-row' : (isVertical ? 'flex-col' : 'flex-col lg:flex-row')}`}>
 
-            {/* Top Bar: Stats & Controls */}
-            <div className="flex justify-between items-center w-full px-4 mb-4 text-xs font-medium text-white/40">
-                <div className="flex items-center gap-2" title="Completed Sessions">
-                    <CheckCircle2 size={12} className={stats.sessions > 0 ? "text-green-400" : ""} />
-                    <span>{stats.sessions} Session{stats.sessions !== 1 ? 's' : ''}</span>
-                </div>
-                <div className="flex gap-3">
-                    <button
-                        onClick={() => setStats(s => ({ ...s, autoStart: !s.autoStart }))}
-                        className={`flex items-center gap-1 transition-colors ${stats.autoStart ? 'text-blue-400' : 'hover:text-white/60'}`}
-                        title="Auto-start next timer"
-                    >
-                        <ArrowRight size={12} /> Auto
-                    </button>
-                    <button
-                        onClick={() => setStats(s => ({ ...s, soundEnabled: !s.soundEnabled }))}
-                        className={`hover:text-white/80 transition-colors ${stats.soundEnabled ? 'text-white/60' : 'text-white/20'}`}
-                    >
-                        {stats.soundEnabled ? <Volume2 size={12} /> : <VolumeX size={12} />}
-                    </button>
-                </div>
-            </div>
-
-            {/* Mode Selector Capsules */}
-            <div className="flex gap-2 mb-8 bg-black/20 p-1 rounded-full backdrop-blur-sm shadow-inner border border-white/5">
-                {(Object.keys(MODES) as Array<keyof typeof MODES>).map((m) => {
-                    const isActive = timerState.mode === m;
-                    const ModeIcon = MODES[m].icon;
-                    return (
-                        <button
-                            key={m}
-                            onClick={() => setMode(m)}
-                            className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${isActive
-                                ? 'bg-white text-black shadow-lg scale-105'
-                                : 'text-white/40 hover:text-white hover:bg-white/10'
-                                }`}
-                        >
-                            <ModeIcon size={12} />
-                            {m}
-                        </button>
-                    );
-                })}
-            </div>
-
-            {/* Main Circular Timer */}
-            <div className="relative mb-8 group">
+            {/* Left: Main Circular Timer */}
+            <div className="relative group shrink-0">
                 <svg width={size} height={size} className="rotate-[-90deg]">
                     {/* Track */}
                     <circle
@@ -340,17 +300,67 @@ export default function Timer({ durations, longBreakInterval, notificationsEnabl
                 </div>
             </div>
 
-            {/* Intent Input */}
-            <div className="w-full px-8">
-                <input
-                    type="text"
-                    value={stats.intent}
-                    onChange={(e) => setStats(s => ({ ...s, intent: e.target.value }))}
-                    placeholder="I am focusing on..."
-                    className="w-full bg-transparent text-center text-sm text-white/70 placeholder-white/20 outline-none border-b border-white/5 focus:border-white/30 pb-2 transition-colors font-medium"
-                />
-            </div>
+            {/* Right: Controls & Dashboard */}
+            <div className="flex flex-col gap-6 w-64">
+                {/* Top Bar: Stats & Controls */}
+                <div className="flex justify-between items-center w-full text-xs font-medium text-white/40 border-b border-white/5 pb-2">
+                    <div className="flex items-center gap-2" title="Completed Sessions">
+                        <CheckCircle2 size={12} className={stats.sessions > 0 ? "text-green-400" : ""} />
+                        <span>{stats.sessions} Session{stats.sessions !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={() => setStats(s => ({ ...s, autoStart: !s.autoStart }))}
+                            className={`flex items-center gap-1 transition-colors ${stats.autoStart ? 'text-blue-400' : 'hover:text-white/60'}`}
+                            title="Auto-start next timer"
+                        >
+                            <ArrowRight size={12} /> Auto
+                        </button>
+                        <button
+                            onClick={() => setStats(s => ({ ...s, soundEnabled: !s.soundEnabled }))}
+                            className={`hover:text-white/80 transition-colors ${stats.soundEnabled ? 'text-white/60' : 'text-white/20'}`}
+                        >
+                            {stats.soundEnabled ? <Volume2 size={12} /> : <VolumeX size={12} />}
+                        </button>
+                    </div>
+                </div>
 
+                {/* Mode Selector Capsules */}
+                <div className="flex flex-col gap-2">
+                    <span className="text-[10px] uppercase tracking-wider font-bold text-white/20 pl-1">Focus Mode</span>
+                    <div className="flex flex-wrap gap-2">
+                        {(Object.keys(MODES) as Array<keyof typeof MODES>).map((m) => {
+                            const isActive = timerState.mode === m;
+                            const ModeIcon = MODES[m].icon;
+                            return (
+                                <button
+                                    key={m}
+                                    onClick={() => setMode(m)}
+                                    className={`px-4 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-2 flex-1 justify-center border ${isActive
+                                        ? 'bg-white/10 border-white/20 text-white shadow-lg'
+                                        : 'bg-white/5 border-transparent text-white/40 hover:text-white hover:bg-white/10'
+                                        }`}
+                                >
+                                    <ModeIcon size={14} />
+                                    {MODES[m].label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Intent Input */}
+                <div className="flex flex-col gap-2">
+                    <span className="text-[10px] uppercase tracking-wider font-bold text-white/20 pl-1">Intent</span>
+                    <input
+                        type="text"
+                        value={stats.intent}
+                        onChange={(e) => setStats(s => ({ ...s, intent: e.target.value }))}
+                        placeholder="I am focusing on..."
+                        className="w-full bg-white/5 rounded-xl px-4 py-3 text-sm text-white/90 placeholder-white/20 outline-none border border-white/5 focus:border-white/20 transition-all font-medium"
+                    />
+                </div>
+            </div>
         </div>
     );
 }

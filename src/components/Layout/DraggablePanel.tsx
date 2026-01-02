@@ -28,7 +28,7 @@ export default function DraggablePanel({ id, initialPosition, children, classNam
     // Load position from local storage on mount & check mobile
     useEffect(() => {
         const checkMobile = () => {
-            setIsMobile(window.innerWidth <= 768);
+            setIsMobile(window.innerWidth < 1024);
         };
 
         checkMobile();
