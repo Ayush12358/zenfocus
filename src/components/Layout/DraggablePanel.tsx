@@ -131,7 +131,7 @@ export default function DraggablePanel({ id, initialPosition, children, classNam
     if (isMobile) {
         return (
             <div
-                className={`w-full max-w-sm mx-auto mb-4 border border-white/10 rounded-2xl shadow-xl backdrop-blur-md ${className}`}
+                className={`w-full max-w-sm mx-auto mb-4 border border-white/10 rounded-2xl shadow-xl backdrop-blur-md pointer-events-auto ${className}`}
                 style={{
                     backgroundColor: `rgba(0, 0, 0, ${transparency / 100})`,
                 }}
@@ -147,7 +147,7 @@ export default function DraggablePanel({ id, initialPosition, children, classNam
     // Desktop: Draggable Absolute Layout
     return (
         <div
-            className={`fixed z-50 border border-white/10 rounded-2xl shadow-2xl transition-shadow ${isDragging ? 'cursor-grabbing shadow-white/10 scale-[1.02]' : ''} ${className}`}
+            className={`fixed z-50 border border-white/10 rounded-2xl shadow-2xl transition-shadow pointer-events-auto ${isDragging ? 'cursor-grabbing shadow-white/10 scale-[1.02]' : ''} ${className}`}
             style={{
                 left: position.x,
                 top: position.y,

@@ -319,7 +319,7 @@ export default function SplitView() {
             </div>
 
             {/* Content Container */}
-            <div className="relative z-10 w-full min-h-screen flex flex-col md:block p-4 md:p-0">
+            <div className="relative z-10 w-full min-h-screen flex flex-col md:block p-4 md:p-0 pointer-events-none">
 
                 {/* Draggable HUD Block */}
                 <DraggablePanel id="hud_block" initialPosition={initialHUDPos} transparency={transparency} blur={blur} className={`transition-opacity duration-700 ${uiHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
