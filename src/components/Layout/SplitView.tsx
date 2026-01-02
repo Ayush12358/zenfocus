@@ -2,10 +2,17 @@
 
 import Clock from '@/components/HUD/Clock';
 import Timer from '@/components/HUD/Timer';
+import DraggablePanel from '@/components/Layout/DraggablePanel';
 import { useState, useEffect } from 'react';
-import { CheckSquare, StickyNote, Settings, History, Play, AlertCircle, Maximize, Minimize, Brain, Coffee, Zap } from 'lucide-react';
+import { CheckSquare, StickyNote, Settings, History, Play, AlertCircle, Maximize, Minimize, Brain, Coffee, Zap, Layers, Droplets, Link as LinkIcon, Plus, Trash2, Globe, ExternalLink, Upload, FileText, ArrowUp, ArrowDown, ArrowDownAZ, Bell } from 'lucide-react';
 
-const DEFAULT_VIDEO_ID = 'jfKfPfyJRdk'; // Lofi Girl
+const DEFAULT_VIDEO_ID = 'playlist:PL8ltyl0rAtoO4vZiGROGEflYt487oUJnA'; // Default Lofi Playlist
+
+interface QuickLink {
+    id: string;
+    title: string;
+    url: string;
+}
 
 export default function SplitView() {
     const [isMounted, setIsMounted] = useState(false);
@@ -16,20 +23,44 @@ export default function SplitView() {
     const [error, setError] = useState('');
     const [isFullscreen, setIsFullscreen] = useState(false);
 
+    // UI Settings
+    const [transparency, setTransparency] = useState(40); // 0-100
+    const [blur, setBlur] = useState(16); // 0-40px
+    const [showQuickLinks, setShowQuickLinks] = useState(true);
+
+    // Quick Links Data
+    const [quickLinks, setQuickLinks] = useState<QuickLink[]>([
+        { id: '1', title: 'Google', url: 'https://google.com' },
+        { id: '2', title: 'YouTube', url: 'https://youtube.com' },
+        { id: '3', title: 'GitHub', url: 'https://github.com' }
+    ]);
+    const [newLinkTitle, setNewLinkTitle] = useState('');
+    const [newLinkUrl, setNewLinkUrl] = useState('');
+
     // Timer Settings
     const [durations, setDurations] = useState({
         focus: 25,
         short: 5,
         long: 15
     });
+    const [longBreakInterval, setLongBreakInterval] = useState(4); // Default 4 sessions
+    const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
     useEffect(() => {
         setIsMounted(true);
         const savedId = localStorage.getItem('zen_video_id');
         const savedHistory = localStorage.getItem('zen_video_history_ids');
         const savedDurations = localStorage.getItem('zen_timer_durations');
+        const savedInterval = localStorage.getItem('zen_long_break_interval');
+        const savedTransparency = localStorage.getItem('zen_ui_transparency');
+        const savedBlur = localStorage.getItem('zen_ui_blur');
+        const savedShowQuickLinks = localStorage.getItem('zen_ui_show_quicklinks');
+        const savedNotifications = localStorage.getItem('zen_notifications_enabled');
+        const savedQuickLinks = localStorage.getItem('zen_quick_links');
 
         if (savedId) setVideoId(savedId);
+        if (savedInterval) setLongBreakInterval(parseInt(savedInterval));
+        if (savedNotifications) setNotificationsEnabled(savedNotifications === 'true');
         if (savedHistory) {
             try {
                 setHistory(JSON.parse(savedHistory));
@@ -42,6 +73,22 @@ export default function SplitView() {
                 setDurations(JSON.parse(savedDurations));
             } catch (e) {
                 console.error('Failed to parse timer durations', e);
+            }
+        }
+        if (savedTransparency) {
+            setTransparency(parseInt(savedTransparency));
+        }
+        if (savedBlur) {
+            setBlur(parseInt(savedBlur));
+        }
+        if (savedShowQuickLinks !== null) {
+            setShowQuickLinks(savedShowQuickLinks === 'true');
+        }
+        if (savedQuickLinks) {
+            try {
+                setQuickLinks(JSON.parse(savedQuickLinks));
+            } catch (e) {
+                console.error('Failed to parse quick links', e);
             }
         }
 
@@ -64,36 +111,173 @@ export default function SplitView() {
         }
     };
 
-    const extractVideoId = (url: string) => {
-        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-        const match = url.match(regExp);
-        return (match && match[2].length === 11) ? match[2] : null;
+    const extractYouTubeId = (url: string) => {
+        // Playlist ID
+        const playlistRegExp = /[?&]list=([^#&?]+)/;
+        const playlistMatch = url.match(playlistRegExp);
+        if (playlistMatch) {
+            return { type: 'playlist', id: playlistMatch[1] };
+        }
+
+        // Video ID
+        const videoRegExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+        const videoMatch = url.match(videoRegExp);
+        if (videoMatch && videoMatch[2].length === 11) {
+            return { type: 'video', id: videoMatch[2] };
+        }
+
+        return null;
     };
 
     const handleUrlSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!inputUrl.trim()) return;
 
-        const extractedId = extractVideoId(inputUrl);
+        const result = extractYouTubeId(inputUrl);
 
-        if (extractedId) {
-            setVideoId(extractedId);
+        if (result) {
+            if (result.type === 'playlist') {
+                setVideoId(`playlist:${result.id}`);
+                localStorage.setItem('zen_video_id', `playlist:${result.id}`);
+                // Don't add playlists to history for now, or handle differently
+            } else {
+                setVideoId(result.id);
+                localStorage.setItem('zen_video_id', result.id);
+                addToHistory(result.id);
+            }
             setError('');
             setInputUrl('');
-            addToHistory(extractedId);
-            localStorage.setItem('zen_video_id', extractedId);
         } else {
             setError('Invalid YouTube URL');
         }
     };
 
-    const handleDurationChange = (key: 'focus' | 'short' | 'long', value: string) => {
-        const num = parseInt(value);
-        if (!isNaN(num) && num > 0) {
-            const newDurations = { ...durations, [key]: num };
-            setDurations(newDurations);
-            localStorage.setItem('zen_timer_durations', JSON.stringify(newDurations));
+    const handleDurationChange = (key: keyof typeof durations, value: string) => {
+        const numVal = parseInt(value) || 1;
+        const newDurations = { ...durations, [key]: numVal };
+        setDurations(newDurations);
+        localStorage.setItem('zen_timer_durations', JSON.stringify(newDurations));
+    };
+
+    const handleIntervalChange = (value: string) => {
+        const numVal = parseInt(value) || 1;
+        setLongBreakInterval(numVal);
+        localStorage.setItem('zen_long_break_interval', numVal.toString());
+    };
+
+    const toggleNotifications = () => {
+        const newState = !notificationsEnabled;
+        if (newState) {
+            Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                    setNotificationsEnabled(true);
+                    localStorage.setItem('zen_notifications_enabled', 'true');
+                    new Notification('Notifications Enabled', { body: 'You will be notified when timers complete.' });
+                } else {
+                    setNotificationsEnabled(false);
+                    setError('Notification permission denied.');
+                }
+            });
+        } else {
+            setNotificationsEnabled(false);
+            localStorage.setItem('zen_notifications_enabled', 'false');
         }
+    };
+
+    const handleTransparencyChange = (value: string) => {
+        const val = parseInt(value);
+        setTransparency(val);
+        localStorage.setItem('zen_ui_transparency', value);
+    };
+
+    const handleBlurChange = (value: string) => {
+        const val = parseInt(value);
+        setBlur(val);
+        localStorage.setItem('zen_ui_blur', value);
+    };
+
+    const toggleQuickLinks = () => {
+        const newValue = !showQuickLinks;
+        setShowQuickLinks(newValue);
+        localStorage.setItem('zen_ui_show_quicklinks', String(newValue));
+    };
+
+    const addQuickLink = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newLinkTitle.trim() || !newLinkUrl.trim()) return;
+
+        let formattedUrl = newLinkUrl;
+        if (!formattedUrl.startsWith('http')) {
+            formattedUrl = `https://${formattedUrl}`;
+        }
+
+        const newLink: QuickLink = {
+            id: Date.now().toString(),
+            title: newLinkTitle,
+            url: formattedUrl
+        };
+
+        const updatedLinks = [...quickLinks, newLink];
+        setQuickLinks(updatedLinks);
+        localStorage.setItem('zen_quick_links', JSON.stringify(updatedLinks));
+        setNewLinkTitle('');
+        setNewLinkUrl('');
+    };
+
+    const removeQuickLink = (id: string) => {
+        const updatedLinks = quickLinks.filter(l => l.id !== id);
+        setQuickLinks(updatedLinks);
+        localStorage.setItem('zen_quick_links', JSON.stringify(updatedLinks));
+    };
+
+    const sortLinks = () => {
+        const sorted = [...quickLinks].sort((a, b) => a.title.localeCompare(b.title));
+        setQuickLinks(sorted);
+        localStorage.setItem('zen_quick_links', JSON.stringify(sorted));
+    };
+
+    const moveLink = (index: number, direction: 'up' | 'down') => {
+        if ((direction === 'up' && index === 0) || (direction === 'down' && index === quickLinks.length - 1)) return;
+
+        const newLinks = [...quickLinks];
+        const temp = newLinks[index];
+        const newIndex = direction === 'up' ? index - 1 : index + 1;
+
+        newLinks[index] = newLinks[newIndex];
+        newLinks[newIndex] = temp;
+
+        setQuickLinks(newLinks);
+        localStorage.setItem('zen_quick_links', JSON.stringify(newLinks));
+    };
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target?.result as string;
+            if (!text) return;
+
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(text, 'text/html');
+            const links = Array.from(doc.getElementsByTagName('a'));
+
+            const importedLinks: QuickLink[] = links.map(link => ({
+                id: `imported-${Date.now()}-${Math.random()}`,
+                title: link.textContent || 'Bookmark',
+                url: link.href
+            })).slice(0, 50); // Limit to 50
+
+            if (importedLinks.length > 0) {
+                const updatedLinks = [...quickLinks, ...importedLinks];
+                setQuickLinks(updatedLinks);
+                localStorage.setItem('zen_quick_links', JSON.stringify(updatedLinks));
+            }
+        };
+        reader.readAsText(file);
+        // Reset input
+        e.target.value = '';
     };
 
     const addToHistory = (id: string) => {
@@ -111,13 +295,21 @@ export default function SplitView() {
 
     if (!isMounted) return null;
 
+    // Approximate default positions
+    const initialHUDPos = { x: typeof window !== 'undefined' ? window.innerWidth / 2 - 150 : 500, y: typeof window !== 'undefined' ? window.innerHeight / 2 - 200 : 300 };
+    const initialDockPos = { x: typeof window !== 'undefined' ? window.innerWidth - 100 : 800, y: typeof window !== 'undefined' ? window.innerHeight / 2 - 150 : 300 };
+    const initialLinksPos = { x: 30, y: typeof window !== 'undefined' ? window.innerHeight / 2 - 150 : 300 };
+
     return (
-        <div className="h-screen w-screen bg-black overflow-hidden relative flex flex-col items-center justify-center text-white">
+        <div className="h-screen w-screen bg-black overflow-hidden relative text-white">
             {/* Background Video */}
-            <div className="absolute inset-0 z-0 bg-black flex items-center justify-center">
+            <div className="absolute inset-0 z-0 bg-black flex items-center justify-center pointer-events-none">
                 <iframe
-                    className="w-full h-full"
-                    src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&controls=1&showinfo=0&rel=0&loop=1&playlist=${videoId}`}
+                    className="w-full h-full pointer-events-auto"
+                    src={videoId.startsWith('playlist:')
+                        ? `https://www.youtube.com/embed?listType=playlist&list=${videoId.split(':')[1]}&autoplay=1&mute=0&controls=1&showinfo=0&rel=0&loop=1`
+                        : `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&controls=1&showinfo=0&rel=0&loop=1&playlist=${videoId}`
+                    }
                     title="Background Video"
                     allow="autoplay; encrypted-media; loop"
                     allowFullScreen
@@ -125,149 +317,404 @@ export default function SplitView() {
                 <div className="absolute inset-0 bg-black/20 pointer-events-none" />
             </div>
 
-            {/* Centre-Right Control Dock */}
-            <div className="absolute right-6 top-1/2 -translate-y-1/2 z-50 flex flex-col gap-4">
+            {/* Draggable HUD Block */}
+            <DraggablePanel id="hud_block" initialPosition={initialHUDPos} transparency={transparency} blur={blur}>
+                <div className="flex flex-col items-center gap-6 p-6 pt-2">
+                    <Clock />
+                    <Timer durations={durations} longBreakInterval={longBreakInterval} notificationsEnabled={notificationsEnabled} />
+                </div>
+            </DraggablePanel>
 
-                {/* Fullscreen Toggle */}
-                <button
-                    onClick={toggleFullscreen}
-                    className="p-3 bg-white/10 hover:bg-white/20 rounded-full backdrop-blur-md transition-all shadow-lg border border-white/5 hover:scale-105"
-                    title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
-                >
-                    {isFullscreen ? <Minimize size={24} /> : <Maximize size={24} />}
-                </button>
-
-                {/* Settings Toggle */}
-                <div className="relative">
+            {/* Draggable Controls Dock */}
+            <DraggablePanel id="controls_dock" initialPosition={initialDockPos} className="w-16 flex flex-col items-center" transparency={transparency} blur={blur}>
+                <div className="flex flex-col gap-2 p-2 pt-0 w-full items-center">
+                    {/* Fullscreen Toggle */}
                     <button
-                        onClick={() => setShowSettings(!showSettings)}
-                        className="p-3 bg-white/10 hover:bg-white/20 rounded-full backdrop-blur-md transition-all group shadow-lg border border-white/5 hover:scale-105"
-                        title="Settings"
+                        onClick={toggleFullscreen}
+                        className="p-3 hover:bg-white/10 rounded-xl transition-all group relative"
                     >
-                        <Settings size={24} className={`transition-transform duration-500 ${showSettings ? 'rotate-90' : 'group-hover:rotate-45'}`} />
+                        {isFullscreen ? <Minimize size={24} /> : <Maximize size={24} />}
+                        <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-black/80 backdrop-blur px-2 py-1 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-white/10">
+                            {isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                        </div>
                     </button>
 
-                    {/* Settings Panel Popover */}
-                    {showSettings && (
-                        <div className="absolute top-0 right-14 w-80 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-2xl animate-fade-in origin-top-right z-50 max-h-[80vh] overflow-y-auto custom-scrollbar">
+                    {/* Settings Toggle */}
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowSettings(!showSettings)}
+                            className="p-3 hover:bg-white/10 rounded-xl transition-all group relative"
+                        >
+                            <Settings size={24} className={`transition-transform duration-500 ${showSettings ? 'rotate-90' : 'group-hover:rotate-45'}`} />
+                            <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-black/80 backdrop-blur px-2 py-1 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-white/10">
+                                Settings
+                            </div>
+                        </button>
+                    </div>
 
-                            {/* Timer Settings */}
-                            <div className="mb-6">
-                                <h3 className="text-sm font-bold uppercase tracking-wider mb-3 text-white/70">Timer Settings (Min)</h3>
-                                <div className="grid grid-cols-3 gap-2">
-                                    <div className="flex flex-col gap-1">
-                                        <label className="text-[10px] text-blue-400 flex items-center gap-1"><Brain size={10} /> Focus</label>
-                                        <input
-                                            type="number"
-                                            value={durations.focus}
-                                            onChange={(e) => handleDurationChange('focus', e.target.value)}
-                                            className="bg-white/10 rounded px-2 py-1 text-sm border border-white/10 focus:border-blue-500 outline-none"
-                                        />
+                    {/* Divider */}
+                    <div className="h-px w-8 bg-white/10 my-1" />
+
+                    {/* Tasks Button */}
+                    <a
+                        href="https://tasks.google.com/tasks/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-3 hover:bg-white/10 rounded-xl transition-all group relative"
+                    >
+                        <CheckSquare size={24} />
+                        <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-black/80 backdrop-blur px-2 py-1 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-white/10">
+                            Google Tasks
+                        </div>
+                    </a>
+
+                    {/* Keep Button */}
+                    <a
+                        href="https://keep.google.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-3 hover:bg-white/10 rounded-xl transition-all group relative"
+                    >
+                        <StickyNote size={24} />
+                        <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-black/80 backdrop-blur px-2 py-1 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-white/10">
+                            Google Keep
+                        </div>
+                    </a>
+                </div>
+            </DraggablePanel >
+
+            {/* NEW: Quick Links Dock */}
+            {showQuickLinks && (
+                <DraggablePanel id="quick_links_dock" initialPosition={initialLinksPos} className="w-16 flex flex-col items-center" transparency={transparency} blur={blur}>
+                    <div className="flex flex-col gap-3 p-2 pt-0 w-full items-center">
+                        {quickLinks.map(link => (
+                            <a
+                                key={link.id}
+                                href={link.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-2 hover:bg-white/15 rounded-xl transition-all hover:scale-110 group relative"
+                            >
+                                {/* Favicon or Fallback */}
+                                <div className="w-6 h-6 rounded overflow-hidden bg-white/10 flex items-center justify-center">
+                                    <img
+                                        src={`https://www.google.com/s2/favicons?domain=${link.url}&sz=32`}
+                                        alt={link.title}
+                                        className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                                        onError={(e) => {
+                                            (e.target as HTMLImageElement).style.display = 'none';
+                                            (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                                        }}
+                                    />
+                                    <Globe size={16} className="hidden absolute text-white/70" />
+                                </div>
+
+                                {/* Tooltip */}
+                                <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 bg-black/80 backdrop-blur px-2 py-1 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-white/10">
+                                    {link.title}
+                                </div>
+                            </a>
+                        ))}
+
+                        {/* Fallback add hint if empty */}
+                        {quickLinks.length === 0 && (
+                            <button onClick={() => setShowSettings(true)} className="p-2 rounded-xl text-white/20 hover:text-white/50">
+                                <Plus size={20} />
+                            </button>
+                        )}
+                    </div>
+                </DraggablePanel>
+            )}
+
+            {/* FULLSCREEN SETTINGS OVERLAY */}
+            {showSettings && (
+                <div
+                    className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-2xl flex items-center justify-center animate-fade-in"
+                    onClick={() => setShowSettings(false)}
+                >
+                    <div
+                        className="w-[600px] max-w-[90vw] max-h-[85vh] bg-black/40 border border-white/10 rounded-3xl p-8 shadow-2xl overflow-y-auto relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="flex justify-between items-center mb-8">
+                            <h2 className="text-2xl font-bold tracking-tight text-white flex items-center gap-3">
+                                <Settings size={28} /> Settings
+                            </h2>
+                            <button
+                                onClick={() => setShowSettings(false)}
+                                className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                            >
+                                <Plus size={28} className="rotate-45" /> {/* Use Plus rotated as X */}
+                            </button>
+                        </div>
+
+                        {/* Visual Settings */}
+                        <div className="mb-8">
+                            <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-white/50 border-b border-white/10 pb-2">Visuals</h3>
+                            <div className="grid grid-cols-2 gap-6">
+                                <div>
+                                    <div className="flex justify-between text-xs text-white/70 mb-2">
+                                        <span className="flex items-center gap-2"><Layers size={14} /> Transparency</span>
+                                        <span>{transparency}%</span>
                                     </div>
-                                    <div className="flex flex-col gap-1">
-                                        <label className="text-[10px] text-green-400 flex items-center gap-1"><Coffee size={10} /> Short</label>
-                                        <input
-                                            type="number"
-                                            value={durations.short}
-                                            onChange={(e) => handleDurationChange('short', e.target.value)}
-                                            className="bg-white/10 rounded px-2 py-1 text-sm border border-white/10 focus:border-green-500 outline-none"
-                                        />
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        value={transparency}
+                                        onChange={(e) => handleTransparencyChange(e.target.value)}
+                                        className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400"
+                                    />
+                                </div>
+                                <div>
+                                    <div className="flex justify-between text-xs text-white/70 mb-2">
+                                        <span className="flex items-center gap-2"><Droplets size={14} /> Blur</span>
+                                        <span>{blur}px</span>
                                     </div>
-                                    <div className="flex flex-col gap-1">
-                                        <label className="text-[10px] text-purple-400 flex items-center gap-1"><Zap size={10} /> Long</label>
-                                        <input
-                                            type="number"
-                                            value={durations.long}
-                                            onChange={(e) => handleDurationChange('long', e.target.value)}
-                                            className="bg-white/10 rounded px-2 py-1 text-sm border border-white/10 focus:border-purple-500 outline-none"
-                                        />
-                                    </div>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="40"
+                                        value={blur}
+                                        onChange={(e) => handleBlurChange(e.target.value)}
+                                        className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Timer Settings */}
+                        <div className="mb-8">
+                            <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-white/50 border-b border-white/10 pb-2">Timer Durations (Minutes)</h3>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+                                    <label className="text-xs text-blue-400 flex items-center gap-2 mb-2 font-semibold"><Brain size={14} /> Focus</label>
+                                    <input
+                                        type="number"
+                                        value={durations.focus}
+                                        onChange={(e) => handleDurationChange('focus', e.target.value)}
+                                        className="bg-transparent text-2xl font-mono font-bold outline-none w-full"
+                                    />
+                                </div>
+                                <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+                                    <label className="text-xs text-green-400 flex items-center gap-2 mb-2 font-semibold"><Coffee size={14} /> Short Break</label>
+                                    <input
+                                        type="number"
+                                        value={durations.short}
+                                        onChange={(e) => handleDurationChange('short', e.target.value)}
+                                        className="bg-transparent text-2xl font-mono font-bold outline-none w-full"
+                                    />
+                                </div>
+                                <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+                                    <label className="text-xs text-purple-400 flex items-center gap-2 mb-2 font-semibold"><Zap size={14} /> Long Break</label>
+                                    <input
+                                        type="number"
+                                        value={durations.long}
+                                        onChange={(e) => handleDurationChange('long', e.target.value)}
+                                        className="bg-transparent text-2xl font-mono font-bold outline-none w-full"
+                                    />
                                 </div>
                             </div>
 
-                            <div className="h-px w-full bg-white/10 mb-4" />
-
-                            {/* Video Settings */}
-                            <h3 className="text-sm font-bold uppercase tracking-wider mb-3 text-white/70">Background Video</h3>
-                            <form onSubmit={handleUrlSubmit} className="flex flex-col gap-2 mb-4">
-                                <div className="flex gap-2">
+                            {/* Interval Setting */}
+                            <div className="mt-4 flex items-center justify-between bg-white/5 rounded-xl p-4 border border-white/5">
+                                <label className="text-xs text-white/50 font-medium">Long Break after</label>
+                                <div className="flex items-center gap-3">
                                     <input
-                                        type="text"
-                                        value={inputUrl}
-                                        onChange={(e) => setInputUrl(e.target.value)}
-                                        placeholder="Paste YouTube Link..."
-                                        className="flex-1 bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition-colors placeholder-white/30"
+                                        type="number"
+                                        min="1"
+                                        max="10"
+                                        value={longBreakInterval}
+                                        onChange={(e) => handleIntervalChange(e.target.value)}
+                                        className="bg-transparent text-xl font-mono font-bold outline-none w-12 text-center border-b border-white/10 focus:border-white/30 transition-colors"
                                     />
+                                    <span className="text-xs text-white/50">sessions</span>
+                                </div>
+                            </div>
+
+                            {/* Notifications Setting */}
+                            <div className="mt-4 flex items-center justify-between bg-white/5 rounded-xl p-4 border border-white/5">
+                                <label className="text-xs text-white/50 font-medium flex items-center gap-2"><Bell size={14} /> Desktop Notifications</label>
+                                <button
+                                    onClick={toggleNotifications}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${notificationsEnabled ? 'bg-green-500/20 border-green-500/50 text-green-200' : 'bg-white/5 border-white/5 text-white/50'}`}
+                                >
+                                    {notificationsEnabled ? 'Enabled' : 'Disabled'}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Quick Links Settings */}
+                        <div className="mb-8">
+                            <div className="flex justify-between items-center mb-4 border-b border-white/10 pb-2">
+                                <h3 className="text-sm font-bold uppercase tracking-wider text-white/50">Quick Links Manager</h3>
+                                <div className="flex gap-2">
                                     <button
-                                        type="submit"
-                                        className="p-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors"
-                                        disabled={!inputUrl.trim()}
-                                        title="Play"
+                                        onClick={sortLinks}
+                                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-medium text-white/70 hover:text-white transition-colors flex items-center gap-2"
                                     >
-                                        <Play size={16} fill="white" />
+                                        <ArrowDownAZ size={14} /> Sort A-Z
+                                    </button>
+                                    <button
+                                        onClick={toggleQuickLinks}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${showQuickLinks ? 'bg-blue-600/20 border-blue-500/50 text-blue-200' : 'bg-white/5 border-white/5 text-white/50'}`}
+                                    >
+                                        {showQuickLinks ? 'Dock Visible' : 'Dock Hidden'}
                                     </button>
                                 </div>
-                                {error && <span className="text-xs text-red-400 flex items-center gap-1"><AlertCircle size={12} /> {error}</span>}
+                            </div>
+
+                            <div className="space-y-4">
+                                {/* Add New */}
+                                <form onSubmit={addQuickLink} className="flex gap-3">
+                                    <input
+                                        type="text"
+                                        value={newLinkTitle}
+                                        onChange={(e) => setNewLinkTitle(e.target.value)}
+                                        placeholder="Site Name"
+                                        className="w-1/3 bg-white/5 rounded-xl px-4 py-3 text-sm border border-white/5 outline-none focus:border-blue-500/50 transition-all font-medium"
+                                    />
+                                    <div className="flex-1 flex gap-3">
+                                        <input
+                                            type="text"
+                                            value={newLinkUrl}
+                                            onChange={(e) => setNewLinkUrl(e.target.value)}
+                                            placeholder="URL (e.g. google.com)"
+                                            className="flex-1 bg-white/5 rounded-xl px-4 py-3 text-sm border border-white/5 outline-none focus:border-blue-500/50 transition-all font-medium"
+                                        />
+                                        <button type="submit" className="px-5 bg-blue-600 hover:bg-blue-500 rounded-xl transition-all shadow-lg shadow-blue-900/20" disabled={!newLinkTitle || !newLinkUrl}>
+                                            <Plus size={20} />
+                                        </button>
+                                    </div>
+                                </form>
+
+                                {/* List */}
+                                <div className="bg-white/5 rounded-2xl p-2 max-h-60 overflow-y-auto border border-white/5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+                                    {quickLinks.length === 0 ? (
+                                        <div className="text-center py-8 text-white/20 italic">No bookmarks added yet.</div>
+                                    ) : (
+                                        <ul className="space-y-1">
+                                            {quickLinks.map((link, index) => (
+                                                <li key={link.id} className="flex items-center justify-between p-3 hover:bg-white/5 rounded-xl group transition-all">
+                                                    <div className="flex items-center gap-3 overflow-hidden">
+                                                        <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                                                            <img
+                                                                src={`https://www.google.com/s2/favicons?domain=${link.url}&sz=32`}
+                                                                alt={link.title}
+                                                                className="w-5 h-5 object-cover opacity-80"
+                                                                onError={(e) => {
+                                                                    (e.target as HTMLImageElement).style.display = 'none';
+                                                                    (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                                                                }}
+                                                            />
+                                                            <Globe size={16} className="hidden absolute text-white/50" />
+                                                        </div>
+                                                        <div className="flex flex-col min-w-0">
+                                                            <span className="text-sm font-medium text-white/90 truncate">{link.title}</span>
+                                                            <span className="text-[10px] text-white/40 truncate">{link.url}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button onClick={() => moveLink(index, 'up')} disabled={index === 0} className="p-2 text-white/30 hover:text-white hover:bg-white/10 rounded-lg disabled:opacity-20 disabled:hover:bg-transparent">
+                                                            <ArrowUp size={14} />
+                                                        </button>
+                                                        <button onClick={() => moveLink(index, 'down')} disabled={index === quickLinks.length - 1} className="p-2 text-white/30 hover:text-white hover:bg-white/10 rounded-lg disabled:opacity-20 disabled:hover:bg-transparent">
+                                                            <ArrowDown size={14} />
+                                                        </button>
+                                                        <div className="w-px h-4 bg-white/10 mx-1" />
+                                                        <button onClick={() => removeQuickLink(link.id)} className="p-2 text-red-400/70 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors">
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </div>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+
+                                {/* Import */}
+                                <div className="flex justify-center">
+                                    <label className="flex items-center gap-2 text-xs font-medium text-white/40 hover:text-white/80 cursor-pointer transition-colors py-2 px-4 hover:bg-white/5 rounded-full">
+                                        <Upload size={14} />
+                                        Import from Browser HTML
+                                        <input
+                                            type="file"
+                                            accept=".html"
+                                            className="hidden"
+                                            onChange={handleFileUpload}
+                                        />
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Video Settings */}
+                        <div>
+                            <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-white/50 border-b border-white/10 pb-2">Background</h3>
+
+                            <form onSubmit={handleUrlSubmit} className="flex flex-col gap-3">
+                                <div className="flex gap-3">
+                                    <div className="relative flex-1">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30">
+                                            <LinkIcon size={16} />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={inputUrl}
+                                            onChange={(e) => setInputUrl(e.target.value)}
+                                            placeholder="Paste YouTube Link..."
+                                            className="w-full bg-white/5 rounded-xl pl-12 pr-4 py-3 text-sm border border-white/5 outline-none focus:border-blue-500/50 transition-all placeholder-white/20"
+                                        />
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        className="px-6 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                        disabled={!inputUrl.trim()}
+                                    >
+                                        Load Video
+                                    </button>
+                                </div>
+                                {error && <span className="text-xs text-red-400 flex items-center gap-2 pl-2"><AlertCircle size={12} /> {error}</span>}
                             </form>
 
                             {history.length > 0 && (
-                                <div>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-xs font-semibold text-white/50 flex items-center gap-1">
-                                            <History size={12} /> Recent IDs
+                                <div className="mt-4">
+                                    <div className="flex justify-between items-center mb-3 px-1">
+                                        <span className="text-xs font-bold text-white/40 uppercase tracking-wider flex items-center gap-2">
+                                            <History size={12} /> Recent History
                                         </span>
-                                        <button onClick={clearHistory} className="text-[10px] text-red-400 hover:text-red-300">Clear</button>
+                                        <button onClick={clearHistory} className="text-[10px] text-red-400/60 hover:text-red-400 transition-colors">Clear All</button>
                                     </div>
-                                    <ul className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-1">
-                                        {history.map((id, index) => (
-                                            <li key={index} className="group flex items-center justify-between bg-white/5 hover:bg-white/10 rounded-lg p-2 transition-colors cursor-pointer" onClick={() => setVideoId(id)}>
-                                                <span className="text-xs truncate max-w-[200px] text-white/80">https://youtu.be/{id}</span>
-                                                <Play size={10} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                                            </li>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {history.slice(0, 4).map((id, index) => (
+                                            <button
+                                                key={index}
+                                                onClick={() => setVideoId(id)}
+                                                className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all text-left group border border-transparent hover:border-white/5"
+                                            >
+                                                <div className="w-10 h-10 rounded-lg bg-black/50 overflow-hidden relative shrink-0">
+                                                    <img src={`https://img.youtube.com/vi/${id}/default.jpg`} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" />
+                                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+                                                        <div className="pointer-events-auto scale-110">
+                                                            <Timer durations={durations} longBreakInterval={longBreakInterval} notificationsEnabled={notificationsEnabled} />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="text-xs text-white/40 mb-0.5">YouTube Video</div>
+                                                    <div className="text-xs font-medium text-white/80 truncate">ID: {id}</div>
+                                                </div>
+                                            </button>
                                         ))}
-                                    </ul>
+                                    </div>
                                 </div>
                             )}
                         </div>
-                    )}
+                    </div>
                 </div>
-
-                {/* Divider */}
-                <div className="h-px w-full bg-white/10 my-1" />
-
-                {/* Tasks Button */}
-                <a
-                    href="https://tasks.google.com/tasks/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-3 bg-blue-600/80 hover:bg-blue-600 rounded-full backdrop-blur-md transition-all shadow-lg border border-white/10 hover:scale-105"
-                    title="Open Tasks"
-                >
-                    <CheckSquare size={24} />
-                </a>
-
-                {/* Keep Button */}
-                <a
-                    href="https://keep.google.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-3 bg-yellow-600/80 hover:bg-yellow-600 rounded-full backdrop-blur-md transition-all shadow-lg border border-white/10 hover:scale-105"
-                    title="Open Keep"
-                >
-                    <StickyNote size={24} />
-                </a>
-
-            </div>
-
-            {/* Content Overlay */}
-            <div className="z-10 relative flex flex-col items-center pointer-events-none">
-                {/* Logo Removed as requested */}
-
-                <div className="flex flex-col items-center gap-8 pointer-events-auto scale-110 mt-16">
-                    <Clock />
-                    <Timer durations={durations} />
-                </div>
-            </div>
-        </div>
+            )}
+        </div >
     );
 }
