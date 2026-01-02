@@ -697,8 +697,8 @@ export default function SplitView() {
                                                 <div className="w-10 h-10 rounded-lg bg-black/50 overflow-hidden relative shrink-0">
                                                     <img src={`https://img.youtube.com/vi/${id}/default.jpg`} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" />
                                                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
-                                                        <div className="pointer-events-auto scale-110">
-                                                            <Timer durations={durations} longBreakInterval={longBreakInterval} notificationsEnabled={notificationsEnabled} />
+                                                        <div className="bg-black/50 p-2 rounded-full backdrop-blur-sm">
+                                                            <Play size={12} className="text-white fill-white translate-x-0.5" />
                                                         </div>
                                                     </div>
                                                 </div>
@@ -711,6 +711,20 @@ export default function SplitView() {
                                     </div>
                                 </div>
                             )}
+                        </div>
+                        <div className="mt-12 pt-6 border-t border-white/5 text-center">
+                            <p className="text-xs text-white/30 font-medium">
+                                Created by <span className="text-white/50">Ayush Maurya</span>
+                            </p>
+                            <div className="flex justify-center gap-4 mt-2 text-[10px] text-white/20">
+                                <a href="https://github.com/Ayush12358/zenfocus" target="_blank" rel="noopener noreferrer" className="hover:text-white/40 transition-colors">
+                                    View on GitHub
+                                </a>
+                                <span>•</span>
+                                <span className="hover:text-white/40 cursor-help" title="Open Source">
+                                    Apache 2.0 License
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
