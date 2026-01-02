@@ -429,9 +429,6 @@ export default function SplitView() {
                                         {videoInteractive ? <MousePointer2 size={20} /> : <Lock size={20} />}
                                     </button> */}
 
-                                    {/* Divider */}
-                                    <div className="h-4 w-px bg-white/10" />
-
                                     {/* App Links */}
                                     <a
                                         href="https://tasks.google.com/tasks/"
