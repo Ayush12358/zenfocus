@@ -1,6 +1,7 @@
 'use client';
 
 import Timer from '@/components/HUD/Timer';
+import Clock from '@/components/HUD/Clock';
 import DraggablePanel from '@/components/Layout/DraggablePanel';
 import { useState, useEffect } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
