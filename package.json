@@ -1,22 +1,23 @@
 {
   "name": "zenfocus",
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "description": "A Cinematic, ADHD-Friendly Productivity Dashboard (PWA)",
+  "author": "Ayush Maurya",
+  "license": "Apache-2.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
-    "@react-oauth/google": "^0.13.4",
+    "@ducanh2912/next-pwa": "^10.2.9",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.562.0",
     "next": "16.1.1",
     "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "react-player": "^3.4.0",
-    "react-resizable-panels": "^4.2.0"
+    "react-dom": "19.2.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
