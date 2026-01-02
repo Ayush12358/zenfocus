@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { GripHorizontal } from 'lucide-react';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 
 interface Position {
     x: number | string;
@@ -18,12 +19,16 @@ interface DraggablePanelProps {
 }
 
 export default function DraggablePanel({ id, initialPosition, children, className = '', transparency = 40, blur = 16 }: DraggablePanelProps) {
-    const [position, setPosition] = useState<Position>(initialPosition);
+    const [storedPosition, setStoredPosition] = useLocalStorage<Position>(`zen_drag_${id}`, initialPosition);
+    const [dragPosition, setDragPosition] = useState<Position | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     // storage for drag offset in pixels
     const [offset, setOffset] = useState<{ x: number, y: number }>({ x: 0, y: 0 });
     const [hasLoaded, setHasLoaded] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+
+    // Active position is the drag one if dragging, else the stored (synced) one
+    const position = dragPosition || storedPosition;
 
     // Load position from local storage on mount & check mobile
     useEffect(() => {
@@ -33,26 +38,9 @@ export default function DraggablePanel({ id, initialPosition, children, classNam
 
         checkMobile();
         window.addEventListener('resize', checkMobile);
-
-        const saved = localStorage.getItem(`zen_drag_${id}`);
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved);
-
-                // MIGRATION: If numbers (pixels) detected, convert to percentages immediately to fix resize bugs
-                // assuming existing pixels were Top-Left based, we convert roughly or just accept them as Center for now 
-                // to avoid complex width calcs before render. 
-                // Better approach: Let's accept them, but the user might experience a shift. 
-                // Ideally we'd re-calc, but waiting for render is hard.
-                // Let's just use them. The user can drag them to fix.
-                setPosition(parsed);
-            } catch (e) {
-                // ignore
-            }
-        }
         setHasLoaded(true);
         return () => window.removeEventListener('resize', checkMobile);
-    }, [id]);
+    }, []);
 
     // Handle Dragging
     useEffect(() => {
@@ -64,27 +52,32 @@ export default function DraggablePanel({ id, initialPosition, children, classNam
             // Update position (Center X/Y in pixels)
             const newX = e.clientX - offset.x;
             const newY = e.clientY - offset.y;
-            setPosition({ x: newX, y: newY });
+            setDragPosition({ x: newX, y: newY });
         };
 
         const handleMouseUp = () => {
             if (isDragging) {
                 setIsDragging(false);
 
-                // DATA NORMALIZATION: Convert to % (Center Relative)
-                const xVal = typeof position.x === 'number' ? position.x : parseFloat(position.x as string);
-                const yVal = typeof position.y === 'number' ? position.y : parseFloat(position.y as string);
+                // Check if we have a drag position to commit
+                if (dragPosition) {
+                    // DATA NORMALIZATION: Convert to % (Center Relative)
+                    const xVal = typeof dragPosition.x === 'number' ? dragPosition.x : parseFloat(dragPosition.x as string);
+                    const yVal = typeof dragPosition.y === 'number' ? dragPosition.y : parseFloat(dragPosition.y as string);
 
-                const winW = window.innerWidth;
-                const winH = window.innerHeight;
+                    const winW = window.innerWidth;
+                    const winH = window.innerHeight;
 
-                const finalX = (xVal / winW) * 100;
-                const finalY = (yVal / winH) * 100;
+                    const finalX = (xVal / winW) * 100;
+                    const finalY = (yVal / winH) * 100;
 
-                const percentPos = { x: `${finalX.toFixed(2)}%`, y: `${finalY.toFixed(2)}%` };
+                    const percentPos = { x: `${finalX.toFixed(2)}%`, y: `${finalY.toFixed(2)}%` };
 
-                setPosition(percentPos);
-                localStorage.setItem(`zen_drag_${id}`, JSON.stringify(percentPos));
+                    // Commit to storage (syncs)
+                    setStoredPosition(percentPos);
+                    // Clear local drag state
+                    setDragPosition(null);
+                }
             }
         };
 
@@ -97,7 +90,7 @@ export default function DraggablePanel({ id, initialPosition, children, classNam
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [isDragging, offset, id, position, isMobile]);
+    }, [isDragging, offset, id, dragPosition, storedPosition, isMobile, setStoredPosition]);
 
     const handleMouseDown = (e: React.MouseEvent) => {
         if (isMobile) return;
@@ -114,7 +107,7 @@ export default function DraggablePanel({ id, initialPosition, children, classNam
         const centerY = rect.top + (rect.height / 2);
 
         // Snapping: Set exact pixel center to avoid visual jump
-        setPosition({ x: centerX, y: centerY });
+        setDragPosition({ x: centerX, y: centerY });
 
         // Offset is distance from Mouse to Center
         setOffset({

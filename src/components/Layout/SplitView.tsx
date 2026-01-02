@@ -1,9 +1,9 @@
 'use client';
 
-import Clock from '@/components/HUD/Clock';
 import Timer from '@/components/HUD/Timer';
 import DraggablePanel from '@/components/Layout/DraggablePanel';
 import { useState, useEffect } from 'react';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { CheckSquare, StickyNote, Settings, History, Play, AlertCircle, Maximize, Minimize, Brain, Coffee, Zap, Layers, Droplets, Link as LinkIcon, Plus, Trash2, Globe, ExternalLink, Upload, FileText, ArrowUp, ArrowDown, ArrowDownAZ, Bell, Eye, EyeOff, MousePointer2, Lock } from 'lucide-react';
 
 const DEFAULT_VIDEO_ID = 'playlist:PL8ltyl0rAtoO4vZiGROGEflYt487oUJnA'; // Default Lofi Playlist
@@ -16,23 +16,23 @@ interface QuickLink {
 
 export default function SplitView() {
     const [isMounted, setIsMounted] = useState(false);
-    const [videoId, setVideoId] = useState(DEFAULT_VIDEO_ID);
+    const [videoId, setVideoId] = useLocalStorage('zen_video_id', DEFAULT_VIDEO_ID);
     const [inputUrl, setInputUrl] = useState('');
-    const [history, setHistory] = useState<string[]>([]);
+    const [history, setHistory] = useLocalStorage<string[]>('zen_video_history_ids', []);
     const [showSettings, setShowSettings] = useState(false);
     const [error, setError] = useState('');
     const [isFullscreen, setIsFullscreen] = useState(false);
 
     // UI Settings
-    const [transparency, setTransparency] = useState(40); // 0-100
-    const [blur, setBlur] = useState(16); // 0-40px
-    const [showQuickLinks, setShowQuickLinks] = useState(false);
+    const [transparency, setTransparency] = useLocalStorage('zen_ui_transparency', 40); // 0-100
+    const [blur, setBlur] = useLocalStorage('zen_ui_blur', 16); // 0-40px
+    const [showQuickLinks, setShowQuickLinks] = useLocalStorage('zen_ui_show_quicklinks', false);
     const [uiHidden, setUiHidden] = useState(false);
     const [orientation, setOrientation] = useState<'auto' | 'horizontal' | 'vertical'>('auto');
     const [videoInteractive, setVideoInteractive] = useState(false);
 
     // Quick Links Data
-    const [quickLinks, setQuickLinks] = useState<QuickLink[]>([
+    const [quickLinks, setQuickLinks] = useLocalStorage<QuickLink[]>('zen_quick_links', [
         { id: '1', title: 'Google', url: 'https://google.com' },
         { id: '2', title: 'YouTube', url: 'https://youtube.com' },
         { id: '3', title: 'GitHub', url: 'https://github.com' }
@@ -41,59 +41,16 @@ export default function SplitView() {
     const [newLinkUrl, setNewLinkUrl] = useState('');
 
     // Timer Settings
-    const [durations, setDurations] = useState({
+    const [durations, setDurations] = useLocalStorage('zen_timer_durations', {
         focus: 25,
         short: 5,
         long: 15
     });
-    const [longBreakInterval, setLongBreakInterval] = useState(4); // Default 4 sessions
-    const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+    const [longBreakInterval, setLongBreakInterval] = useLocalStorage('zen_long_break_interval', 4); // Default 4 sessions
+    const [notificationsEnabled, setNotificationsEnabled] = useLocalStorage('zen_notifications_enabled', false);
 
     useEffect(() => {
         setIsMounted(true);
-        const savedId = localStorage.getItem('zen_video_id');
-        const savedHistory = localStorage.getItem('zen_video_history_ids');
-        const savedDurations = localStorage.getItem('zen_timer_durations');
-        const savedInterval = localStorage.getItem('zen_long_break_interval');
-        const savedTransparency = localStorage.getItem('zen_ui_transparency');
-        const savedBlur = localStorage.getItem('zen_ui_blur');
-        const savedShowQuickLinks = localStorage.getItem('zen_ui_show_quicklinks');
-        const savedNotifications = localStorage.getItem('zen_notifications_enabled');
-        const savedQuickLinks = localStorage.getItem('zen_quick_links');
-
-        if (savedId) setVideoId(savedId);
-        if (savedInterval) setLongBreakInterval(parseInt(savedInterval));
-        if (savedNotifications) setNotificationsEnabled(savedNotifications === 'true');
-        if (savedHistory) {
-            try {
-                setHistory(JSON.parse(savedHistory));
-            } catch (e) {
-                console.error('Failed to parse history', e);
-            }
-        }
-        if (savedDurations) {
-            try {
-                setDurations(JSON.parse(savedDurations));
-            } catch (e) {
-                console.error('Failed to parse timer durations', e);
-            }
-        }
-        if (savedTransparency) {
-            setTransparency(parseInt(savedTransparency));
-        }
-        if (savedBlur) {
-            setBlur(parseInt(savedBlur));
-        }
-        if (savedShowQuickLinks !== null) {
-            setShowQuickLinks(savedShowQuickLinks === 'true');
-        }
-        if (savedQuickLinks) {
-            try {
-                setQuickLinks(JSON.parse(savedQuickLinks));
-            } catch (e) {
-                console.error('Failed to parse quick links', e);
-            }
-        }
 
         const handleFullscreenChange = () => {
             setIsFullscreen(!!document.fullscreenElement);
@@ -141,11 +98,9 @@ export default function SplitView() {
         if (result) {
             if (result.type === 'playlist') {
                 setVideoId(`playlist:${result.id}`);
-                localStorage.setItem('zen_video_id', `playlist:${result.id}`);
                 // Don't add playlists to history for now, or handle differently
             } else {
                 setVideoId(result.id);
-                localStorage.setItem('zen_video_id', result.id);
                 addToHistory(result.id);
             }
             setError('');
@@ -159,13 +114,11 @@ export default function SplitView() {
         const numVal = parseInt(value) || 1;
         const newDurations = { ...durations, [key]: numVal };
         setDurations(newDurations);
-        localStorage.setItem('zen_timer_durations', JSON.stringify(newDurations));
     };
 
     const handleIntervalChange = (value: string) => {
         const numVal = parseInt(value) || 1;
         setLongBreakInterval(numVal);
-        localStorage.setItem('zen_long_break_interval', numVal.toString());
     };
 
     const toggleNotifications = () => {
@@ -174,7 +127,6 @@ export default function SplitView() {
             Notification.requestPermission().then(permission => {
                 if (permission === 'granted') {
                     setNotificationsEnabled(true);
-                    localStorage.setItem('zen_notifications_enabled', 'true');
                     new Notification('Notifications Enabled', { body: 'You will be notified when timers complete.' });
                 } else {
                     setNotificationsEnabled(false);
@@ -183,26 +135,22 @@ export default function SplitView() {
             });
         } else {
             setNotificationsEnabled(false);
-            localStorage.setItem('zen_notifications_enabled', 'false');
         }
     };
 
     const handleTransparencyChange = (value: string) => {
         const val = parseInt(value);
         setTransparency(val);
-        localStorage.setItem('zen_ui_transparency', value);
     };
 
     const handleBlurChange = (value: string) => {
         const val = parseInt(value);
         setBlur(val);
-        localStorage.setItem('zen_ui_blur', value);
     };
 
     const toggleQuickLinks = () => {
         const newValue = !showQuickLinks;
         setShowQuickLinks(newValue);
-        localStorage.setItem('zen_ui_show_quicklinks', String(newValue));
     };
 
     const addQuickLink = (e: React.FormEvent) => {
@@ -222,7 +170,6 @@ export default function SplitView() {
 
         const updatedLinks = [...quickLinks, newLink];
         setQuickLinks(updatedLinks);
-        localStorage.setItem('zen_quick_links', JSON.stringify(updatedLinks));
         setNewLinkTitle('');
         setNewLinkUrl('');
     };
@@ -230,13 +177,11 @@ export default function SplitView() {
     const removeQuickLink = (id: string) => {
         const updatedLinks = quickLinks.filter(l => l.id !== id);
         setQuickLinks(updatedLinks);
-        localStorage.setItem('zen_quick_links', JSON.stringify(updatedLinks));
     };
 
     const sortLinks = () => {
         const sorted = [...quickLinks].sort((a, b) => a.title.localeCompare(b.title));
         setQuickLinks(sorted);
-        localStorage.setItem('zen_quick_links', JSON.stringify(sorted));
     };
 
     const moveLink = (index: number, direction: 'up' | 'down') => {
@@ -250,7 +195,6 @@ export default function SplitView() {
         newLinks[newIndex] = temp;
 
         setQuickLinks(newLinks);
-        localStorage.setItem('zen_quick_links', JSON.stringify(newLinks));
     };
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -275,7 +219,6 @@ export default function SplitView() {
             if (importedLinks.length > 0) {
                 const updatedLinks = [...quickLinks, ...importedLinks];
                 setQuickLinks(updatedLinks);
-                localStorage.setItem('zen_quick_links', JSON.stringify(updatedLinks));
             }
         };
         reader.readAsText(file);
@@ -287,13 +230,11 @@ export default function SplitView() {
         if (!history.includes(id)) {
             const newHistory = [id, ...history].slice(0, 10);
             setHistory(newHistory);
-            localStorage.setItem('zen_video_history_ids', JSON.stringify(newHistory));
         }
     };
 
     const clearHistory = () => {
         setHistory([]);
-        localStorage.removeItem('zen_video_history_ids');
     };
 
     if (!isMounted) return null;
