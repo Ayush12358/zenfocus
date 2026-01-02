@@ -331,7 +331,10 @@ export default function SplitView() {
             <div className="absolute inset-0 z-0 bg-black flex items-center justify-center">
                 {/* 1. Underlying Iframe */}
                 <iframe
-                    className={`w-full h-full transition-all duration-500 ${videoInteractive ? 'pointer-events-auto scale-100' : 'pointer-events-none scale-[1.02] blur-[2px]'}`}
+                    className={`transition-all duration-700 ease-in-out ${videoInteractive
+                        ? 'w-full h-full pointer-events-auto scale-100 opacity-100'
+                        : 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 min-w-full min-h-full w-[177.77vh] h-[56.25vw] pointer-events-none scale-[1.01]'
+                        }`}
                     src={videoId.startsWith('playlist:')
                         ? `https://www.youtube.com/embed?listType=playlist&list=${videoId.split(':')[1]}&autoplay=1&mute=0&controls=1&showinfo=0&rel=0&loop=1`
                         : `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&controls=1&showinfo=0&rel=0&loop=1&playlist=${videoId}`
@@ -421,13 +424,16 @@ export default function SplitView() {
                                     </button>
 
                                     {/* Video Interaction Toggle */}
-                                    {/* <button
+                                    <button
                                         onClick={() => setVideoInteractive(!videoInteractive)}
                                         className={`p-2 rounded-xl transition-all group relative ${videoInteractive ? 'bg-white/20 text-white shadow-lg' : 'hover:bg-white/10 text-white/50 hover:text-white'}`}
                                         title={videoInteractive ? "Lock Video Focus" : "Unlock Video Focus"}
                                     >
                                         {videoInteractive ? <MousePointer2 size={20} /> : <Lock size={20} />}
-                                    </button> */}
+                                    </button>
+
+                                    {/* Divider */}
+                                    <div className="h-4 w-px bg-white/10" />
 
                                     {/* App Links */}
                                     <a
