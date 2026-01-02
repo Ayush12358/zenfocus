@@ -4,7 +4,7 @@ import Clock from '@/components/HUD/Clock';
 import Timer from '@/components/HUD/Timer';
 import DraggablePanel from '@/components/Layout/DraggablePanel';
 import { useState, useEffect } from 'react';
-import { CheckSquare, StickyNote, Settings, History, Play, AlertCircle, Maximize, Minimize, Brain, Coffee, Zap, Layers, Droplets, Link as LinkIcon, Plus, Trash2, Globe, ExternalLink, Upload, FileText, ArrowUp, ArrowDown, ArrowDownAZ, Bell } from 'lucide-react';
+import { CheckSquare, StickyNote, Settings, History, Play, AlertCircle, Maximize, Minimize, Brain, Coffee, Zap, Layers, Droplets, Link as LinkIcon, Plus, Trash2, Globe, ExternalLink, Upload, FileText, ArrowUp, ArrowDown, ArrowDownAZ, Bell, Eye, EyeOff } from 'lucide-react';
 
 const DEFAULT_VIDEO_ID = 'playlist:PL8ltyl0rAtoO4vZiGROGEflYt487oUJnA'; // Default Lofi Playlist
 
@@ -27,6 +27,7 @@ export default function SplitView() {
     const [transparency, setTransparency] = useState(40); // 0-100
     const [blur, setBlur] = useState(16); // 0-40px
     const [showQuickLinks, setShowQuickLinks] = useState(false);
+    const [uiHidden, setUiHidden] = useState(false);
 
     // Quick Links Data
     const [quickLinks, setQuickLinks] = useState<QuickLink[]>([
@@ -321,7 +322,7 @@ export default function SplitView() {
             <div className="relative z-10 w-full min-h-screen flex flex-col md:block p-4 md:p-0">
 
                 {/* Draggable HUD Block */}
-                <DraggablePanel id="hud_block" initialPosition={initialHUDPos} transparency={transparency} blur={blur}>
+                <DraggablePanel id="hud_block" initialPosition={initialHUDPos} transparency={transparency} blur={blur} className={`transition-opacity duration-700 ${uiHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                     <div className="flex flex-col items-center gap-6 p-6 pt-2">
                         <Clock />
                         <Timer durations={durations} longBreakInterval={longBreakInterval} notificationsEnabled={notificationsEnabled} />
@@ -329,66 +330,79 @@ export default function SplitView() {
                 </DraggablePanel>
 
                 {/* Draggable Controls Dock */}
-                <DraggablePanel id="controls_dock" initialPosition={initialDockPos} className="w-full md:w-16 flex flex-col items-center" transparency={transparency} blur={blur}>
+                <DraggablePanel id="controls_dock" initialPosition={initialDockPos} className="w-full md:w-16 flex flex-col items-center" transparency={uiHidden ? 0 : transparency} blur={uiHidden ? 0 : blur}>
                     <div className="flex flex-row md:flex-col gap-4 md:gap-2 p-4 md:p-2 md:pt-0 w-full items-center justify-center">
-                        {/* Fullscreen Toggle */}
+                        {/* Hide UI Toggle */}
                         <button
-                            onClick={toggleFullscreen}
-                            className="p-3 hover:bg-white/10 rounded-xl transition-all group relative"
+                            onClick={() => setUiHidden(!uiHidden)}
+                            className="p-3 hover:bg-white/10 rounded-xl transition-all group relative text-white/50 hover:text-white"
                         >
-                            {isFullscreen ? <Minimize size={24} /> : <Maximize size={24} />}
+                            {uiHidden ? <Eye size={24} /> : <EyeOff size={24} />}
                             <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-black/80 backdrop-blur px-2 py-1 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-white/10">
-                                {isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                                {uiHidden ? "Show UI" : "Hide UI"}
                             </div>
                         </button>
 
-                        {/* Settings Toggle */}
-                        <div className="relative">
+                        <div className={`flex flex-row md:flex-col gap-4 md:gap-2 items-center w-full transition-all duration-500 ${uiHidden ? 'hidden' : 'flex'}`}>
+                            {/* Fullscreen Toggle */}
                             <button
-                                onClick={() => setShowSettings(!showSettings)}
+                                onClick={toggleFullscreen}
                                 className="p-3 hover:bg-white/10 rounded-xl transition-all group relative"
                             >
-                                <Settings size={24} className={`transition-transform duration-500 ${showSettings ? 'rotate-90' : 'group-hover:rotate-45'}`} />
+                                {isFullscreen ? <Minimize size={24} /> : <Maximize size={24} />}
                                 <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-black/80 backdrop-blur px-2 py-1 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-white/10">
-                                    Settings
+                                    {isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
                                 </div>
                             </button>
+
+                            {/* Settings Toggle */}
+                            <div className="relative">
+                                <button
+                                    onClick={() => setShowSettings(!showSettings)}
+                                    className="p-3 hover:bg-white/10 rounded-xl transition-all group relative"
+                                >
+                                    <Settings size={24} className={`transition-transform duration-500 ${showSettings ? 'rotate-90' : 'group-hover:rotate-45'}`} />
+                                    <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-black/80 backdrop-blur px-2 py-1 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-white/10">
+                                        Settings
+                                    </div>
+                                </button>
+                            </div>
+
+                            {/* Divider */}
+                            <div className="h-8 w-px md:h-px md:w-8 bg-white/10 my-1 mx-2 md:mx-0" />
+
+                            {/* Tasks Button */}
+                            <a
+                                href="https://tasks.google.com/tasks/"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-3 hover:bg-white/10 rounded-xl transition-all group relative"
+                            >
+                                <CheckSquare size={24} />
+                                <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-black/80 backdrop-blur px-2 py-1 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-white/10">
+                                    Google Tasks
+                                </div>
+                            </a>
+
+                            {/* Keep Button */}
+                            <a
+                                href="https://keep.google.com"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-3 hover:bg-white/10 rounded-xl transition-all group relative"
+                            >
+                                <StickyNote size={24} />
+                                <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-black/80 backdrop-blur px-2 py-1 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-white/10">
+                                    Google Keep
+                                </div>
+                            </a>
                         </div>
-
-                        {/* Divider */}
-                        <div className="h-px w-8 bg-white/10 my-1" />
-
-                        {/* Tasks Button */}
-                        <a
-                            href="https://tasks.google.com/tasks/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-3 hover:bg-white/10 rounded-xl transition-all group relative"
-                        >
-                            <CheckSquare size={24} />
-                            <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-black/80 backdrop-blur px-2 py-1 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-white/10">
-                                Google Tasks
-                            </div>
-                        </a>
-
-                        {/* Keep Button */}
-                        <a
-                            href="https://keep.google.com"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-3 hover:bg-white/10 rounded-xl transition-all group relative"
-                        >
-                            <StickyNote size={24} />
-                            <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-black/80 backdrop-blur px-2 py-1 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-white/10">
-                                Google Keep
-                            </div>
-                        </a>
                     </div>
-                </DraggablePanel >
+                </DraggablePanel>
 
                 {/* NEW: Quick Links Dock */}
                 {showQuickLinks && (
-                    <DraggablePanel id="quick_links_dock" initialPosition={initialLinksPos} className="w-full md:w-16 flex flex-col items-center" transparency={transparency} blur={blur}>
+                    <DraggablePanel id="quick_links_dock" initialPosition={initialLinksPos} className={`w-full md:w-16 flex flex-col items-center transition-opacity duration-700 ${uiHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'}`} transparency={transparency} blur={blur}>
                         <div className="flex flex-row md:flex-col gap-3 p-4 md:p-2 md:pt-0 w-full items-center justify-center flex-wrap">
                             {quickLinks.map(link => (
                                 <a
