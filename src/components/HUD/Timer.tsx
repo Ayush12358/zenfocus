@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 
-import { Play, Pause, RotateCcw, Coffee, Brain, Zap, CheckCircle2, Volume2, VolumeX, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
+import { Play, Pause, RotateCcw, Coffee, Brain, Zap, CheckCircle2, Volume2, VolumeX, ArrowRight, Sparkles, Loader2, ChevronDown } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 
 
@@ -41,6 +41,8 @@ export default function Timer({ durations, longBreakInterval, notificationsEnabl
         autoStart: false,
         soundEnabled: true
     });
+
+    const [intentOptions] = useLocalStorage<string[]>('zen_current_intent_options', []);
 
 
 
@@ -357,18 +359,37 @@ export default function Timer({ durations, longBreakInterval, notificationsEnabl
                     </div>
                 </div>
 
-                {/* Intent Input */}
                 <div className="flex flex-col gap-2">
                     <span className="text-[10px] uppercase tracking-wider font-bold text-white/20 pl-1">Intent</span>
-                    <div className="relative">
-                        <input
-                            type="text"
+                    <div className="relative group">
+                        <select
                             value={stats.intent}
                             onChange={(e) => setStats(s => ({ ...s, intent: e.target.value }))}
-                            placeholder="I am focusing on..."
-                            className="w-full bg-white/5 rounded-xl px-4 py-3 text-sm text-white/90 placeholder-white/20 outline-none border border-white/5 focus:border-white/20 transition-all font-medium"
+                            className="w-full appearance-none bg-white/5 hover:bg-white/10 rounded-xl px-4 py-3 pr-10 text-sm text-white/90 outline-none border border-white/5 focus:border-white/20 transition-all font-medium cursor-pointer"
+                        >
+                            <option value="" className="bg-zinc-900 text-white/50">(No Intent Selected)</option>
+                            {intentOptions.length > 0 && (
+                                <optgroup label="Your Tasks" className="bg-zinc-900 text-white/40">
+                                    {intentOptions.map((opt, i) => (
+                                        <option key={i} value={opt} className="bg-zinc-900 text-white">
+                                            {opt}
+                                        </option>
+                                    ))}
+                                </optgroup>
+                            )}
+                            {stats.intent && !intentOptions.includes(stats.intent) && (
+                                <optgroup label="Custom" className="bg-zinc-900 text-white/40">
+                                    <option value={stats.intent} className="bg-zinc-900 text-white">
+                                        {stats.intent}
+                                    </option>
+                                </optgroup>
+                            )}
+                        </select>
+                        <ChevronDown
+                            size={14}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none group-hover:text-white/40 transition-colors"
                         />
-                    </div> {/* End of relative wrapper for input */}
+                    </div>
                 </div>
             </div>
         </div>

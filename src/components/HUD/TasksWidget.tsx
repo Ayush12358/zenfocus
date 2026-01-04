@@ -24,9 +24,17 @@ export default function TasksWidget() {
 
     const [googleTasks, setGoogleTasks] = useState<Task[]>([]);
     const [taskLists, setTaskLists] = useState<TaskList[]>([]);
+    const [, setIntentOptions] = useLocalStorage<string[]>('zen_current_intent_options', []);
+
     const [isLoading, setIsLoading] = useState(false);
     const [isSignedIn, setIsSignedIn] = useState(false);
     const [newTask, setNewTask] = useState('');
+
+    // Sync current visible tasks to shared intent options
+    useEffect(() => {
+        const visibleTasks = (useGoogle && isSignedIn) ? googleTasks : localTasks;
+        setIntentOptions(visibleTasks.map(t => t.text));
+    }, [googleTasks, localTasks, useGoogle, isSignedIn, setIntentOptions]);
 
     useEffect(() => {
         if (useGoogle && googleClientId) {

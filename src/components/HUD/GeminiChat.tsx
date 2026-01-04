@@ -70,7 +70,7 @@ export default function GeminiChat({ isOpen, onClose }: GeminiChatProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
 
     // App State Hooks (for tool execution)
-    const [, setTimerState] = useLocalStorage('zen_timer_state_v3', {});
+    const [timerState, setTimerState] = useLocalStorage('zen_timer_state_v3', { isRunning: false, remaining: 25 * 60 * 1000, mode: 'focus' });
     const [, setTimerStats] = useLocalStorage('zen_timer_stats', {});
     const [, setTransparency] = useLocalStorage('zen_ui_transparency', 40);
     const [, setBlur] = useLocalStorage('zen_ui_blur', 16);
@@ -79,6 +79,7 @@ export default function GeminiChat({ isOpen, onClose }: GeminiChatProps) {
     const [, setUiHidden] = useLocalStorage('zen_ui_hidden', false);
 
     const [selectedListId] = useLocalStorage('zen_selected_list_id', '@default');
+    const [timerStats] = useLocalStorage('zen_timer_stats', { intent: '' });
     const [aiContext] = useLocalStorage('zen_ai_context', '');
 
     useEffect(() => {
@@ -230,7 +231,16 @@ export default function GeminiChat({ isOpen, onClose }: GeminiChatProps) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     contents: [
-                        { role: 'user', parts: [{ text: SYSTEM_PROMPT + (aiContext ? `\n\nUSER CONTEXT: ${aiContext}` : "") }] },
+                        {
+                            role: 'user',
+                            parts: [{
+                                text: SYSTEM_PROMPT +
+                                    (aiContext ? `\n\nUSER BACKGROUND: ${aiContext}` : "") +
+                                    (timerStats.intent ? `\n\nCURRENT INTENT: The user is currently focusing on "${timerStats.intent}".` : "") +
+                                    `\n\nCURRENT TIME: ${new Date().toLocaleString()}` +
+                                    `\n\nTIMER STATUS: The timer is ${timerState.isRunning ? 'RUNNING' : 'PAUSED'}. Mode: ${timerState.mode}. Time remaining: ${Math.floor(timerState.remaining / 60000)} minutes.`
+                            }]
+                        },
                         ...history,
                         { role: 'user', parts: [{ text: userMsg }] }
                     ]
