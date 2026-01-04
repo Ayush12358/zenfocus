@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Play, Pause, RotateCcw, Coffee, Brain, Zap, CheckCircle2, Volume2, VolumeX, ArrowRight } from 'lucide-react';
+
+import { Play, Pause, RotateCcw, Coffee, Brain, Zap, CheckCircle2, Volume2, VolumeX, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+
 
 interface TimerProps {
     durations: {
@@ -39,6 +41,8 @@ export default function Timer({ durations, longBreakInterval, notificationsEnabl
         autoStart: false,
         soundEnabled: true
     });
+
+
 
     const [displayTime, setDisplayTime] = useState(timerState.remaining);
 
@@ -156,6 +160,8 @@ export default function Timer({ durations, longBreakInterval, notificationsEnabl
                         });
                     }
 
+
+
                     setTimerState({
                         ...timerState,
                         isRunning: stats.autoStart,
@@ -238,6 +244,8 @@ export default function Timer({ durations, longBreakInterval, notificationsEnabl
     };
 
     const currentColor = MODES[timerState.mode].color;
+
+
 
     // Calculate if we should force side-by-side or stack
     const isHorizontal = orientation === 'horizontal';
@@ -352,13 +360,15 @@ export default function Timer({ durations, longBreakInterval, notificationsEnabl
                 {/* Intent Input */}
                 <div className="flex flex-col gap-2">
                     <span className="text-[10px] uppercase tracking-wider font-bold text-white/20 pl-1">Intent</span>
-                    <input
-                        type="text"
-                        value={stats.intent}
-                        onChange={(e) => setStats(s => ({ ...s, intent: e.target.value }))}
-                        placeholder="I am focusing on..."
-                        className="w-full bg-white/5 rounded-xl px-4 py-3 text-sm text-white/90 placeholder-white/20 outline-none border border-white/5 focus:border-white/20 transition-all font-medium"
-                    />
+                    <div className="relative">
+                        <input
+                            type="text"
+                            value={stats.intent}
+                            onChange={(e) => setStats(s => ({ ...s, intent: e.target.value }))}
+                            placeholder="I am focusing on..."
+                            className="w-full bg-white/5 rounded-xl px-4 py-3 text-sm text-white/90 placeholder-white/20 outline-none border border-white/5 focus:border-white/20 transition-all font-medium"
+                        />
+                    </div> {/* End of relative wrapper for input */}
                 </div>
             </div>
         </div>

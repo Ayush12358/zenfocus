@@ -2,10 +2,14 @@
 
 import Timer from '@/components/HUD/Timer';
 import Clock from '@/components/HUD/Clock';
+import GeminiChat from '@/components/HUD/GeminiChat';
+import TasksWidget from '@/components/HUD/TasksWidget';
+import NotesWidget from '@/components/HUD/NotesWidget';
 import DraggablePanel from '@/components/Layout/DraggablePanel';
+import { GoogleTasksService } from '@/services/GoogleTasksService';
 import { useState, useEffect } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { CheckSquare, StickyNote, Settings, History, Play, AlertCircle, Maximize, Minimize, Brain, Coffee, Zap, Layers, Droplets, Link as LinkIcon, Plus, Trash2, Globe, ExternalLink, Upload, FileText, ArrowUp, ArrowDown, ArrowDownAZ, Bell, Eye, EyeOff, MousePointer2, Lock } from 'lucide-react';
+import { CheckSquare, StickyNote, Settings, History, Play, AlertCircle, Maximize, Minimize, Brain, Coffee, Zap, Layers, Droplets, Link as LinkIcon, Plus, Trash2, Globe, ExternalLink, Upload, FileText, ArrowUp, ArrowDown, ArrowDownAZ, Bell, Eye, EyeOff, MousePointer2, Lock, Sparkles, Key } from 'lucide-react';
 
 const DEFAULT_VIDEO_ID = 'playlist:PL8ltyl0rAtoO4vZiGROGEflYt487oUJnA'; // Default Lofi Playlist
 
@@ -21,6 +25,7 @@ export default function SplitView() {
     const [inputUrl, setInputUrl] = useState('');
     const [history, setHistory] = useLocalStorage<string[]>('zen_video_history_ids', []);
     const [showSettings, setShowSettings] = useState(false);
+    const [showGeminiChat, setShowGeminiChat] = useState(false);
     const [error, setError] = useState('');
     const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -28,9 +33,24 @@ export default function SplitView() {
     const [transparency, setTransparency] = useLocalStorage('zen_ui_transparency', 40); // 0-100
     const [blur, setBlur] = useLocalStorage('zen_ui_blur', 16); // 0-40px
     const [showQuickLinks, setShowQuickLinks] = useLocalStorage('zen_ui_show_quicklinks', false);
-    const [uiHidden, setUiHidden] = useState(false);
-    const [orientation, setOrientation] = useState<'auto' | 'horizontal' | 'vertical'>('auto');
-    const [videoInteractive, setVideoInteractive] = useState(false);
+
+    const [uiHidden, setUiHidden] = useLocalStorage('zen_ui_hidden', false);
+    const [orientation, setOrientation] = useLocalStorage<'auto' | 'horizontal' | 'vertical'>('zen_ui_orientation', 'auto');
+    const [videoInteractive, setVideoInteractive] = useLocalStorage('zen_video_interactive', false);
+    const [showTasks, setShowTasks] = useLocalStorage('zen_show_tasks', false);
+    const [showNotes, setShowNotes] = useLocalStorage('zen_show_notes', false);
+
+    // AI Settings
+    const [apiKey, setApiKey] = useLocalStorage('zen_gemini_api_key', '');
+    const [modelName, setModelName] = useLocalStorage('zen_gemini_model', 'gemini-flash-lite-latest');
+    const [googleClientId, setGoogleClientId] = useLocalStorage('zen_google_client_id', '');
+    const [aiContext, setAiContext] = useLocalStorage('zen_ai_context', '');
+
+    useEffect(() => {
+        if (googleClientId) {
+            GoogleTasksService.initClient(googleClientId).catch(console.error);
+        }
+    }, [googleClientId]);
 
     // Quick Links Data
     const [quickLinks, setQuickLinks] = useLocalStorage<QuickLink[]>('zen_quick_links', [
@@ -374,6 +394,15 @@ export default function SplitView() {
                                         {videoInteractive ? <MousePointer2 size={20} /> : <Lock size={20} />}
                                     </button>
 
+                                    {/* Gemini Toggle (New) */}
+                                    <button
+                                        onClick={() => setShowGeminiChat(!showGeminiChat)}
+                                        className={`p-2 rounded-xl transition-all group relative ${showGeminiChat ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/40' : 'hover:bg-white/10 text-indigo-300 hover:text-indigo-100'}`}
+                                        title="AI Commander"
+                                    >
+                                        <Sparkles size={20} className={showGeminiChat ? 'fill-white' : ''} />
+                                    </button>
+
                                     {/* Divider */}
                                     <div className="h-4 w-px bg-white/10" />
 
@@ -397,11 +426,52 @@ export default function SplitView() {
                                     >
                                         <StickyNote size={20} />
                                     </a>
+
+                                    {/* Native Tools */}
+                                    <div className="h-4 w-px bg-white/10" />
+
+                                    <button
+                                        onClick={() => setShowTasks(!showTasks)}
+                                        className={`p-2 rounded-xl transition-all group relative ${showTasks ? 'bg-white/20 text-white' : 'hover:bg-white/10 text-white/50 hover:text-white'}`}
+                                        title="Tasks"
+                                    >
+                                        <CheckSquare size={20} />
+                                    </button>
+
+                                    <button
+                                        onClick={() => setShowNotes(!showNotes)}
+                                        className={`p-2 rounded-xl transition-all group relative ${showNotes ? 'bg-white/20 text-white' : 'hover:bg-white/10 text-white/50 hover:text-white'}`}
+                                        title="Notes"
+                                    >
+                                        <StickyNote size={20} />
+                                    </button>
                                 </div>
                             </div>
                         )}
                     </div>
                 </DraggablePanel>
+
+                {/* Tasks Panel */}
+                {
+                    showTasks && !uiHidden && (
+                        <DraggablePanel id="zen_tasks" initialPosition={{ x: '20%', y: '50%' }} transparency={transparency} blur={blur} className="pointer-events-auto">
+                            <div className="w-[300px] h-[400px]">
+                                <TasksWidget />
+                            </div>
+                        </DraggablePanel>
+                    )
+                }
+
+                {/* Notes Panel */}
+                {
+                    showNotes && !uiHidden && (
+                        <DraggablePanel id="zen_notes" initialPosition={{ x: '80%', y: '50%' }} transparency={transparency} blur={blur} className="pointer-events-auto">
+                            <div className="w-[300px] h-[400px]">
+                                <NotesWidget />
+                            </div>
+                        </DraggablePanel>
+                    )
+                }
 
                 {/* Floating Hide UI Toggle (Always available) */}
                 <div className={`fixed bottom-8 right-8 z-50 pointer-events-auto transition-all duration-500 ${uiHidden ? 'opacity-100' : 'opacity-40 hover:opacity-100'}`}>
@@ -416,327 +486,389 @@ export default function SplitView() {
 
 
 
-            </div>
+
+
+            </div >
 
             {/* FULLSCREEN SETTINGS OVERLAY */}
-            {showSettings && (
-                <div
-                    className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-2xl flex items-center justify-center animate-fade-in"
-                    onClick={() => setShowSettings(false)}
-                >
+            {
+                showSettings && (
                     <div
-                        className="w-[600px] max-w-[90vw] max-h-[85vh] bg-black/40 border border-white/10 rounded-3xl p-8 shadow-2xl overflow-y-auto relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']"
-                        onClick={(e) => e.stopPropagation()}
+                        className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-2xl flex items-center justify-center animate-fade-in"
+                        onClick={() => setShowSettings(false)}
                     >
-                        {/* Header */}
-                        <div className="flex justify-between items-center mb-8">
-                            <h2 className="text-2xl font-bold tracking-tight text-white flex items-center gap-3">
-                                <Settings size={28} /> Settings
-                            </h2>
-                            <button
-                                onClick={() => setShowSettings(false)}
-                                className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                            >
-                                <Plus size={28} className="rotate-45" /> {/* Use Plus rotated as X */}
-                            </button>
-                        </div>
-
-                        {/* Visual Settings */}
-                        <div className="mb-8">
-                            <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-white/50 border-b border-white/10 pb-2">Visuals</h3>
-                            <div className="grid grid-cols-2 gap-6">
-                                <div>
-                                    <div className="flex justify-between text-xs text-white/70 mb-2">
-                                        <span className="flex items-center gap-2"><Layers size={14} /> Transparency</span>
-                                        <span>{transparency}%</span>
-                                    </div>
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="100"
-                                        value={transparency}
-                                        onChange={(e) => handleTransparencyChange(e.target.value)}
-                                        className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400"
-                                    />
-                                </div>
-                                <div>
-                                    <div className="flex justify-between text-xs text-white/70 mb-2">
-                                        <span className="flex items-center gap-2"><Droplets size={14} /> Blur</span>
-                                        <span>{blur}px</span>
-                                    </div>
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="40"
-                                        value={blur}
-                                        onChange={(e) => handleBlurChange(e.target.value)}
-                                        className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* HUD Layout Setting */}
-                        <div className="mb-8">
-                            <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-white/50 border-b border-white/10 pb-2">HUD Layout</h3>
-                            <div className="flex gap-2 bg-white/5 p-1 rounded-xl">
-                                {(['auto', 'horizontal', 'vertical'] as const).map((mode) => (
-                                    <button
-                                        key={mode}
-                                        onClick={() => setOrientation(mode)}
-                                        className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all capitalize ${orientation === mode ? 'bg-white/10 text-white shadow-lg' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
-                                    >
-                                        {mode}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Timer Settings */}
-                        <div className="mb-8">
-                            <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-white/50 border-b border-white/10 pb-2">Timer Durations (Minutes)</h3>
-                            <div className="grid grid-cols-3 gap-4">
-                                <div className="bg-white/5 rounded-xl p-4 border border-white/5">
-                                    <label className="text-xs text-blue-400 flex items-center gap-2 mb-2 font-semibold"><Brain size={14} /> Focus</label>
-                                    <input
-                                        type="number"
-                                        value={durations.focus}
-                                        onChange={(e) => handleDurationChange('focus', e.target.value)}
-                                        className="bg-transparent text-2xl font-mono font-bold outline-none w-full"
-                                    />
-                                </div>
-                                <div className="bg-white/5 rounded-xl p-4 border border-white/5">
-                                    <label className="text-xs text-green-400 flex items-center gap-2 mb-2 font-semibold"><Coffee size={14} /> Short Break</label>
-                                    <input
-                                        type="number"
-                                        value={durations.short}
-                                        onChange={(e) => handleDurationChange('short', e.target.value)}
-                                        className="bg-transparent text-2xl font-mono font-bold outline-none w-full"
-                                    />
-                                </div>
-                                <div className="bg-white/5 rounded-xl p-4 border border-white/5">
-                                    <label className="text-xs text-purple-400 flex items-center gap-2 mb-2 font-semibold"><Zap size={14} /> Long Break</label>
-                                    <input
-                                        type="number"
-                                        value={durations.long}
-                                        onChange={(e) => handleDurationChange('long', e.target.value)}
-                                        className="bg-transparent text-2xl font-mono font-bold outline-none w-full"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Interval Setting */}
-                            <div className="mt-4 flex items-center justify-between bg-white/5 rounded-xl p-4 border border-white/5">
-                                <label className="text-xs text-white/50 font-medium">Long Break after</label>
-                                <div className="flex items-center gap-3">
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        max="10"
-                                        value={longBreakInterval}
-                                        onChange={(e) => handleIntervalChange(e.target.value)}
-                                        className="bg-transparent text-xl font-mono font-bold outline-none w-12 text-center border-b border-white/10 focus:border-white/30 transition-colors"
-                                    />
-                                    <span className="text-xs text-white/50">sessions</span>
-                                </div>
-                            </div>
-
-                            {/* Notifications Setting */}
-                            <div className="mt-4 flex items-center justify-between bg-white/5 rounded-xl p-4 border border-white/5">
-                                <label className="text-xs text-white/50 font-medium flex items-center gap-2"><Bell size={14} /> Desktop Notifications</label>
+                        <div
+                            className="w-[600px] max-w-[90vw] max-h-[85vh] bg-black/40 border border-white/10 rounded-3xl p-8 shadow-2xl overflow-y-auto relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {/* Header */}
+                            <div className="flex justify-between items-center mb-8">
+                                <h2 className="text-2xl font-bold tracking-tight text-white flex items-center gap-3">
+                                    <Settings size={28} /> Settings
+                                </h2>
                                 <button
-                                    onClick={toggleNotifications}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${notificationsEnabled ? 'bg-green-500/20 border-green-500/50 text-green-200' : 'bg-white/5 border-white/5 text-white/50'}`}
+                                    onClick={() => setShowSettings(false)}
+                                    className="p-2 hover:bg-white/10 rounded-full transition-colors"
                                 >
-                                    {notificationsEnabled ? 'Enabled' : 'Disabled'}
+                                    <Plus size={28} className="rotate-45" /> {/* Use Plus rotated as X */}
                                 </button>
                             </div>
-                        </div>
 
-                        {/* Quick Links Settings */}
-                        <div className="mb-8">
-                            <div className="flex justify-between items-center mb-4 border-b border-white/10 pb-2">
-                                <h3 className="text-sm font-bold uppercase tracking-wider text-white/50">Quick Links Manager</h3>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={sortLinks}
-                                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-medium text-white/70 hover:text-white transition-colors flex items-center gap-2"
-                                    >
-                                        <ArrowDownAZ size={14} /> Sort A-Z
-                                    </button>
-                                    <button
-                                        onClick={toggleQuickLinks}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${showQuickLinks ? 'bg-blue-600/20 border-blue-500/50 text-blue-200' : 'bg-white/5 border-white/5 text-white/50'}`}
-                                    >
-                                        {showQuickLinks ? 'Dock Visible' : 'Dock Hidden'}
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="space-y-4">
-                                {/* Add New */}
-                                <form onSubmit={addQuickLink} className="flex gap-3">
-                                    <input
-                                        type="text"
-                                        value={newLinkTitle}
-                                        onChange={(e) => setNewLinkTitle(e.target.value)}
-                                        placeholder="Site Name"
-                                        className="w-1/3 bg-white/5 rounded-xl px-4 py-3 text-sm border border-white/5 outline-none focus:border-blue-500/50 transition-all font-medium"
-                                    />
-                                    <div className="flex-1 flex gap-3">
-                                        <input
-                                            type="text"
-                                            value={newLinkUrl}
-                                            onChange={(e) => setNewLinkUrl(e.target.value)}
-                                            placeholder="URL (e.g. google.com)"
-                                            className="flex-1 bg-white/5 rounded-xl px-4 py-3 text-sm border border-white/5 outline-none focus:border-blue-500/50 transition-all font-medium"
-                                        />
-                                        <button type="submit" className="px-5 bg-blue-600 hover:bg-blue-500 rounded-xl transition-all shadow-lg shadow-blue-900/20" disabled={!newLinkTitle || !newLinkUrl}>
-                                            <Plus size={20} />
-                                        </button>
-                                    </div>
-                                </form>
-
-                                {/* List */}
-                                <div className="bg-white/5 rounded-2xl p-2 max-h-60 overflow-y-auto border border-white/5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
-                                    {quickLinks.length === 0 ? (
-                                        <div className="text-center py-8 text-white/20 italic">No bookmarks added yet.</div>
-                                    ) : (
-                                        <ul className="space-y-1">
-                                            {quickLinks.map((link, index) => (
-                                                <li key={link.id} className="flex items-center justify-between p-3 hover:bg-white/5 rounded-xl group transition-all">
-                                                    <div className="flex items-center gap-3 overflow-hidden">
-                                                        <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
-                                                            <img
-                                                                src={`https://www.google.com/s2/favicons?domain=${link.url}&sz=32`}
-                                                                alt={link.title}
-                                                                className="w-5 h-5 object-cover opacity-80"
-                                                                onError={(e) => {
-                                                                    (e.target as HTMLImageElement).style.display = 'none';
-                                                                    (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
-                                                                }}
-                                                            />
-                                                            <Globe size={16} className="hidden absolute text-white/50" />
-                                                        </div>
-                                                        <div className="flex flex-col min-w-0">
-                                                            <span className="text-sm font-medium text-white/90 truncate">{link.title}</span>
-                                                            <span className="text-[10px] text-white/40 truncate">{link.url}</span>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button onClick={() => moveLink(index, 'up')} disabled={index === 0} className="p-2 text-white/30 hover:text-white hover:bg-white/10 rounded-lg disabled:opacity-20 disabled:hover:bg-transparent">
-                                                            <ArrowUp size={14} />
-                                                        </button>
-                                                        <button onClick={() => moveLink(index, 'down')} disabled={index === quickLinks.length - 1} className="p-2 text-white/30 hover:text-white hover:bg-white/10 rounded-lg disabled:opacity-20 disabled:hover:bg-transparent">
-                                                            <ArrowDown size={14} />
-                                                        </button>
-                                                        <div className="w-px h-4 bg-white/10 mx-1" />
-                                                        <button onClick={() => removeQuickLink(link.id)} className="p-2 text-red-400/70 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors">
-                                                            <Trash2 size={14} />
-                                                        </button>
-                                                    </div>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    )}
-                                </div>
-
-                                {/* Import */}
-                                <div className="flex justify-center">
-                                    <label className="flex items-center gap-2 text-xs font-medium text-white/40 hover:text-white/80 cursor-pointer transition-colors py-2 px-4 hover:bg-white/5 rounded-full">
-                                        <Upload size={14} />
-                                        Import from Browser HTML
-                                        <input
-                                            type="file"
-                                            accept=".html"
-                                            className="hidden"
-                                            onChange={handleFileUpload}
-                                        />
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Video Settings */}
-                        <div>
-                            <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-white/50 border-b border-white/10 pb-2">Background</h3>
-
-                            <form onSubmit={handleUrlSubmit} className="flex flex-col gap-3">
-                                <div className="flex gap-3">
-                                    <div className="relative flex-1">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30">
-                                            <LinkIcon size={16} />
+                            {/* Visual Settings */}
+                            <div className="mb-8">
+                                <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-white/50 border-b border-white/10 pb-2">Visuals</h3>
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div>
+                                        <div className="flex justify-between text-xs text-white/70 mb-2">
+                                            <span className="flex items-center gap-2"><Layers size={14} /> Transparency</span>
+                                            <span>{transparency}%</span>
                                         </div>
                                         <input
-                                            type="text"
-                                            value={inputUrl}
-                                            onChange={(e) => setInputUrl(e.target.value)}
-                                            placeholder="Paste YouTube Link..."
-                                            className="w-full bg-white/5 rounded-xl pl-12 pr-4 py-3 text-sm border border-white/5 outline-none focus:border-blue-500/50 transition-all placeholder-white/20"
+                                            type="range"
+                                            min="0"
+                                            max="100"
+                                            value={transparency}
+                                            onChange={(e) => handleTransparencyChange(e.target.value)}
+                                            className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400"
                                         />
                                     </div>
+                                    <div>
+                                        <div className="flex justify-between text-xs text-white/70 mb-2">
+                                            <span className="flex items-center gap-2"><Droplets size={14} /> Blur</span>
+                                            <span>{blur}px</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="40"
+                                            value={blur}
+                                            onChange={(e) => handleBlurChange(e.target.value)}
+                                            className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* HUD Layout Setting */}
+                            <div className="mb-8">
+                                <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-white/50 border-b border-white/10 pb-2">HUD Layout</h3>
+                                <div className="flex gap-2 bg-white/5 p-1 rounded-xl">
+                                    {(['auto', 'horizontal', 'vertical'] as const).map((mode) => (
+                                        <button
+                                            key={mode}
+                                            onClick={() => setOrientation(mode)}
+                                            className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all capitalize ${orientation === mode ? 'bg-white/10 text-white shadow-lg' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                                        >
+                                            {mode}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Timer Settings */}
+                            <div className="mb-8">
+                                <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-white/50 border-b border-white/10 pb-2">Timer Durations (Minutes)</h3>
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+                                        <label className="text-xs text-blue-400 flex items-center gap-2 mb-2 font-semibold"><Brain size={14} /> Focus</label>
+                                        <input
+                                            type="number"
+                                            value={durations.focus}
+                                            onChange={(e) => handleDurationChange('focus', e.target.value)}
+                                            className="bg-transparent text-2xl font-mono font-bold outline-none w-full"
+                                        />
+                                    </div>
+                                    <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+                                        <label className="text-xs text-green-400 flex items-center gap-2 mb-2 font-semibold"><Coffee size={14} /> Short Break</label>
+                                        <input
+                                            type="number"
+                                            value={durations.short}
+                                            onChange={(e) => handleDurationChange('short', e.target.value)}
+                                            className="bg-transparent text-2xl font-mono font-bold outline-none w-full"
+                                        />
+                                    </div>
+                                    <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+                                        <label className="text-xs text-purple-400 flex items-center gap-2 mb-2 font-semibold"><Zap size={14} /> Long Break</label>
+                                        <input
+                                            type="number"
+                                            value={durations.long}
+                                            onChange={(e) => handleDurationChange('long', e.target.value)}
+                                            className="bg-transparent text-2xl font-mono font-bold outline-none w-full"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Interval Setting */}
+                                <div className="mt-4 flex items-center justify-between bg-white/5 rounded-xl p-4 border border-white/5">
+                                    <label className="text-xs text-white/50 font-medium">Long Break after</label>
+                                    <div className="flex items-center gap-3">
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="10"
+                                            value={longBreakInterval}
+                                            onChange={(e) => handleIntervalChange(e.target.value)}
+                                            className="bg-transparent text-xl font-mono font-bold outline-none w-12 text-center border-b border-white/10 focus:border-white/30 transition-colors"
+                                        />
+                                        <span className="text-xs text-white/50">sessions</span>
+                                    </div>
+                                </div>
+
+                                {/* Notifications Setting */}
+                                <div className="mt-4 flex items-center justify-between bg-white/5 rounded-xl p-4 border border-white/5">
+                                    <label className="text-xs text-white/50 font-medium flex items-center gap-2"><Bell size={14} /> Desktop Notifications</label>
                                     <button
-                                        type="submit"
-                                        className="px-6 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                        disabled={!inputUrl.trim()}
+                                        onClick={toggleNotifications}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${notificationsEnabled ? 'bg-green-500/20 border-green-500/50 text-green-200' : 'bg-white/5 border-white/5 text-white/50'}`}
                                     >
-                                        Load Video
+                                        {notificationsEnabled ? 'Enabled' : 'Disabled'}
                                     </button>
                                 </div>
-                                {error && <span className="text-xs text-red-400 flex items-center gap-2 pl-2"><AlertCircle size={12} /> {error}</span>}
-                            </form>
+                            </div>
 
-                            {history.length > 0 && (
-                                <div className="mt-4">
-                                    <div className="flex justify-between items-center mb-3 px-1">
-                                        <span className="text-xs font-bold text-white/40 uppercase tracking-wider flex items-center gap-2">
-                                            <History size={12} /> Recent History
-                                        </span>
-                                        <button onClick={clearHistory} className="text-[10px] text-red-400/60 hover:text-red-400 transition-colors">Clear All</button>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {history.slice(0, 4).map((id, index) => (
-                                            <button
-                                                key={index}
-                                                onClick={() => setVideoId(id)}
-                                                className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all text-left group border border-transparent hover:border-white/5"
-                                            >
-                                                <div className="w-10 h-10 rounded-lg bg-black/50 overflow-hidden relative shrink-0">
-                                                    <img src={`https://img.youtube.com/vi/${id}/default.jpg`} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" />
-                                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
-                                                        <div className="bg-black/50 p-2 rounded-full backdrop-blur-sm">
-                                                            <Play size={12} className="text-white fill-white translate-x-0.5" />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <div className="text-xs text-white/40 mb-0.5">YouTube Video</div>
-                                                    <div className="text-xs font-medium text-white/80 truncate">ID: {id}</div>
-                                                </div>
-                                            </button>
-                                        ))}
+                            {/* Quick Links Settings */}
+                            <div className="mb-8">
+                                <div className="flex justify-between items-center mb-4 border-b border-white/10 pb-2">
+                                    <h3 className="text-sm font-bold uppercase tracking-wider text-white/50">Quick Links Manager</h3>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={sortLinks}
+                                            className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-medium text-white/70 hover:text-white transition-colors flex items-center gap-2"
+                                        >
+                                            <ArrowDownAZ size={14} /> Sort A-Z
+                                        </button>
+                                        <button
+                                            onClick={toggleQuickLinks}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${showQuickLinks ? 'bg-blue-600/20 border-blue-500/50 text-blue-200' : 'bg-white/5 border-white/5 text-white/50'}`}
+                                        >
+                                            {showQuickLinks ? 'Dock Visible' : 'Dock Hidden'}
+                                        </button>
                                     </div>
                                 </div>
-                            )}
-                        </div>
-                        <div className="mt-12 pt-6 border-t border-white/5 text-center">
-                            <p className="text-xs text-white/30 font-medium">
-                                Created by <span className="text-white/50">Ayush Maurya</span>
-                            </p>
-                            <div className="flex justify-center gap-4 mt-2 text-[10px] text-white/20">
-                                <a href="https://github.com/Ayush12358/zenfocus" target="_blank" rel="noopener noreferrer" className="hover:text-white/40 transition-colors">
-                                    View on GitHub
-                                </a>
-                                <span>•</span>
-                                <span className="hover:text-white/40 cursor-help" title="Open Source">
-                                    Apache 2.0 License
-                                </span>
+
+                                <div className="space-y-4">
+                                    {/* Add New */}
+                                    <form onSubmit={addQuickLink} className="flex gap-3">
+                                        <input
+                                            type="text"
+                                            value={newLinkTitle}
+                                            onChange={(e) => setNewLinkTitle(e.target.value)}
+                                            placeholder="Site Name"
+                                            className="w-1/3 bg-white/5 rounded-xl px-4 py-3 text-sm border border-white/5 outline-none focus:border-blue-500/50 transition-all font-medium"
+                                        />
+                                        <div className="flex-1 flex gap-3">
+                                            <input
+                                                type="text"
+                                                value={newLinkUrl}
+                                                onChange={(e) => setNewLinkUrl(e.target.value)}
+                                                placeholder="URL (e.g. google.com)"
+                                                className="flex-1 bg-white/5 rounded-xl px-4 py-3 text-sm border border-white/5 outline-none focus:border-blue-500/50 transition-all font-medium"
+                                            />
+                                            <button type="submit" className="px-5 bg-blue-600 hover:bg-blue-500 rounded-xl transition-all shadow-lg shadow-blue-900/20" disabled={!newLinkTitle || !newLinkUrl}>
+                                                <Plus size={20} />
+                                            </button>
+                                        </div>
+                                    </form>
+
+                                    {/* List */}
+                                    <div className="bg-white/5 rounded-2xl p-2 max-h-60 overflow-y-auto border border-white/5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+                                        {quickLinks.length === 0 ? (
+                                            <div className="text-center py-8 text-white/20 italic">No bookmarks added yet.</div>
+                                        ) : (
+                                            <ul className="space-y-1">
+                                                {quickLinks.map((link, index) => (
+                                                    <li key={link.id} className="flex items-center justify-between p-3 hover:bg-white/5 rounded-xl group transition-all">
+                                                        <div className="flex items-center gap-3 overflow-hidden">
+                                                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                                                                <img
+                                                                    src={`https://www.google.com/s2/favicons?domain=${link.url}&sz=32`}
+                                                                    alt={link.title}
+                                                                    className="w-5 h-5 object-cover opacity-80"
+                                                                    onError={(e) => {
+                                                                        (e.target as HTMLImageElement).style.display = 'none';
+                                                                        (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                                                                    }}
+                                                                />
+                                                                <Globe size={16} className="hidden absolute text-white/50" />
+                                                            </div>
+                                                            <div className="flex flex-col min-w-0">
+                                                                <span className="text-sm font-medium text-white/90 truncate">{link.title}</span>
+                                                                <span className="text-[10px] text-white/40 truncate">{link.url}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button onClick={() => moveLink(index, 'up')} disabled={index === 0} className="p-2 text-white/30 hover:text-white hover:bg-white/10 rounded-lg disabled:opacity-20 disabled:hover:bg-transparent">
+                                                                <ArrowUp size={14} />
+                                                            </button>
+                                                            <button onClick={() => moveLink(index, 'down')} disabled={index === quickLinks.length - 1} className="p-2 text-white/30 hover:text-white hover:bg-white/10 rounded-lg disabled:opacity-20 disabled:hover:bg-transparent">
+                                                                <ArrowDown size={14} />
+                                                            </button>
+                                                            <div className="w-px h-4 bg-white/10 mx-1" />
+                                                            <button onClick={() => removeQuickLink(link.id)} className="p-2 text-red-400/70 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors">
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </div>
+
+                                    {/* Import */}
+                                    <div className="flex justify-center">
+                                        <label className="flex items-center gap-2 text-xs font-medium text-white/40 hover:text-white/80 cursor-pointer transition-colors py-2 px-4 hover:bg-white/5 rounded-full">
+                                            <Upload size={14} />
+                                            Import from Browser HTML
+                                            <input
+                                                type="file"
+                                                accept=".html"
+                                                className="hidden"
+                                                onChange={handleFileUpload}
+                                            />
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+
+
+                            {/* AI Settings */}
+                            <div className="mb-8">
+                                <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-white/50 border-b border-white/10 pb-2">AI Configuration</h3>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-xs text-white/70 mb-2 block font-medium">Google Client ID (For Tasks Sync)</label>
+                                        <input
+                                            type="text"
+                                            value={googleClientId}
+                                            onChange={(e) => setGoogleClientId(e.target.value)}
+                                            placeholder="...apps.googleusercontent.com"
+                                            className="w-full bg-white/5 rounded-xl px-4 py-3 text-sm border border-white/5 outline-none focus:border-indigo-500/50 transition-all font-mono"
+                                        />
+                                        <p className="text-[10px] text-white/30 mt-1 pl-1">Optional. Required for syncing with Google Tasks.</p>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-white/70 mb-2 block font-medium">Google Gemini API Key</label>
+                                        <div className="relative">
+                                            <input
+                                                type="password"
+                                                value={apiKey}
+                                                onChange={(e) => setApiKey(e.target.value)}
+                                                placeholder="AIzaSy..."
+                                                className="w-full bg-white/5 rounded-xl px-4 py-3 text-sm border border-white/5 outline-none focus:border-indigo-500/50 transition-all font-mono"
+                                            />
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-white/20">
+                                                <Key size={14} />
+                                            </div>
+                                        </div>
+                                        <p className="text-[10px] text-white/30 mt-1 pl-1">Required for Focus Partner features.</p>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-white/70 mb-2 block font-medium">Gemini Model ID</label>
+                                        <input
+                                            type="text"
+                                            value={modelName}
+                                            onChange={(e) => setModelName(e.target.value)}
+                                            placeholder="gemini-flash-lite-latest"
+                                            className="w-full bg-white/5 rounded-xl px-4 py-3 text-sm border border-white/5 outline-none focus:border-indigo-500/50 transition-all font-mono"
+                                        />
+                                        <p className="text-[10px] text-white/30 mt-1 pl-1">Default: gemini-flash-lite-latest</p>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-white/70 mb-2 block font-medium">Personal AI Context (About You)</label>
+                                        <textarea
+                                            value={aiContext}
+                                            onChange={(e) => setAiContext(e.target.value)}
+                                            placeholder="e.g. I am a software engineer focusing on React. I prefer concise advice and dark aesthetics."
+                                            className="w-full bg-white/5 rounded-xl px-4 py-3 text-sm border border-white/5 outline-none focus:border-indigo-500/50 transition-all min-h-[100px] resize-none"
+                                        />
+                                        <p className="text-[10px] text-white/30 mt-1 pl-1">Tell the AI about your goals, habits, or role to get better help.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Video Settings */}
+                            <div>
+                                <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-white/50 border-b border-white/10 pb-2">Background</h3>
+
+                                <form onSubmit={handleUrlSubmit} className="flex flex-col gap-3">
+                                    <div className="flex gap-3">
+                                        <div className="relative flex-1">
+                                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30">
+                                                <LinkIcon size={16} />
+                                            </div>
+                                            <input
+                                                type="text"
+                                                value={inputUrl}
+                                                onChange={(e) => setInputUrl(e.target.value)}
+                                                placeholder="Paste YouTube Link..."
+                                                className="w-full bg-white/5 rounded-xl pl-12 pr-4 py-3 text-sm border border-white/5 outline-none focus:border-blue-500/50 transition-all placeholder-white/20"
+                                            />
+                                        </div>
+                                        <button
+                                            type="submit"
+                                            className="px-6 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                            disabled={!inputUrl.trim()}
+                                        >
+                                            Load Video
+                                        </button>
+                                    </div>
+                                    {error && <span className="text-xs text-red-400 flex items-center gap-2 pl-2"><AlertCircle size={12} /> {error}</span>}
+                                </form>
+
+                                {history.length > 0 && (
+                                    <div className="mt-4">
+                                        <div className="flex justify-between items-center mb-3 px-1">
+                                            <span className="text-xs font-bold text-white/40 uppercase tracking-wider flex items-center gap-2">
+                                                <History size={12} /> Recent History
+                                            </span>
+                                            <button onClick={clearHistory} className="text-[10px] text-red-400/60 hover:text-red-400 transition-colors">Clear All</button>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {history.slice(0, 4).map((id, index) => (
+                                                <button
+                                                    key={index}
+                                                    onClick={() => setVideoId(id)}
+                                                    className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all text-left group border border-transparent hover:border-white/5"
+                                                >
+                                                    <div className="w-10 h-10 rounded-lg bg-black/50 overflow-hidden relative shrink-0">
+                                                        <img src={`https://img.youtube.com/vi/${id}/default.jpg`} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" />
+                                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+                                                            <div className="bg-black/50 p-2 rounded-full backdrop-blur-sm">
+                                                                <Play size={12} className="text-white fill-white translate-x-0.5" />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="text-xs text-white/40 mb-0.5">YouTube Video</div>
+                                                        <div className="text-xs font-medium text-white/80 truncate">ID: {id}</div>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="mt-12 pt-6 border-t border-white/5 text-center">
+                                <p className="text-xs text-white/30 font-medium">
+                                    Created by <span className="text-white/50">Ayush Maurya</span>
+                                </p>
+                                <div className="flex justify-center gap-4 mt-2 text-[10px] text-white/20">
+                                    <a href="https://github.com/Ayush12358/zenfocus" target="_blank" rel="noopener noreferrer" className="hover:text-white/40 transition-colors">
+                                        View on GitHub
+                                    </a>
+                                    <span>•</span>
+                                    <span className="hover:text-white/40 cursor-help" title="Open Source">
+                                        Apache 2.0 License
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
+            <GeminiChat isOpen={showGeminiChat} onClose={() => setShowGeminiChat(false)} />
         </div >
     );
 }
