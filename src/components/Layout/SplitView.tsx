@@ -9,7 +9,7 @@ import DraggablePanel from '@/components/Layout/DraggablePanel';
 import { GoogleTasksService } from '@/services/GoogleTasksService';
 import { useState, useEffect } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { CheckSquare, StickyNote, Settings, History, Play, AlertCircle, Maximize, Minimize, Brain, Coffee, Zap, Layers, Droplets, Link as LinkIcon, Plus, Trash2, Globe, ExternalLink, Upload, FileText, ArrowUp, ArrowDown, ArrowDownAZ, Bell, Eye, EyeOff, MousePointer2, Lock, Sparkles, Key } from 'lucide-react';
+import { CheckSquare, StickyNote, Settings, History, Play, AlertCircle, Maximize, Minimize, Brain, Coffee, Zap, Layers, Droplets, Link as LinkIcon, Plus, Trash2, Globe, ExternalLink, Upload, FileText, ArrowUp, ArrowDown, ArrowDownAZ, Bell, Eye, EyeOff, MousePointer2, Lock, Sparkles, Key, Download, UploadCloud } from 'lucide-react';
 
 const DEFAULT_VIDEO_ID = 'playlist:PL8ltyl0rAtoO4vZiGROGEflYt487oUJnA'; // Default Lofi Playlist
 
@@ -256,6 +256,64 @@ export default function SplitView() {
 
     const clearHistory = () => {
         setHistory([]);
+    };
+
+    const handleExportSettings = () => {
+        const EXPORT_KEYS = [
+            'zen_video_id', 'zen_ui_transparency', 'zen_ui_blur', 'zen_ui_show_quicklinks',
+            'zen_ui_hidden', 'zen_ui_orientation', 'zen_video_interactive', 'zen_show_tasks',
+            'zen_show_notes', 'zen_gemini_api_key', 'zen_gemini_model', 'zen_google_client_id',
+            'zen_quick_links', 'zen_timer_durations', 'zen_long_break_interval',
+            'zen_notifications_enabled', 'zen_ai_context', 'zen_tasks', 'zen_notes'
+        ];
+
+        const exportData: Record<string, any> = {};
+        EXPORT_KEYS.forEach(key => {
+            const val = window.localStorage.getItem(key);
+            if (val !== null) exportData[key] = val;
+        });
+
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `zenfocus_backup_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleImportSettings = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const text = event.target?.result as string;
+                if (!text) return;
+                const data = JSON.parse(text);
+
+                // Validate generic structure (check for at least one known key)
+                if (typeof data !== 'object') throw new Error("Invalid format");
+
+                Object.keys(data).forEach(key => {
+                    // Only import known keys to avoid polluting storage
+                    if (key.startsWith('zen_')) {
+                        window.localStorage.setItem(key, data[key]);
+                    }
+                });
+
+                // Force reload to apply changes (simplest way to sync all hooks)
+                window.location.reload();
+            } catch (err) {
+                console.error("Import failed", err);
+                alert("Failed to import settings. Invalid file.");
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = '';
     };
 
     if (!isMounted) return null;
@@ -776,15 +834,50 @@ export default function SplitView() {
                                         <p className="text-[10px] text-white/30 mt-1 pl-1">Default: gemini-flash-lite-latest</p>
                                     </div>
                                     <div>
-                                        <label className="text-xs text-white/70 mb-2 block font-medium">Personal AI Context (About You)</label>
+                                        <label className="text-xs text-white/70 mb-2 block font-medium">Personal AI Context (Memory)</label>
                                         <textarea
                                             value={aiContext}
                                             onChange={(e) => setAiContext(e.target.value)}
-                                            placeholder="e.g. I am a software engineer focusing on React. I prefer concise advice and dark aesthetics."
-                                            className="w-full bg-white/5 rounded-xl px-4 py-3 text-sm border border-white/5 outline-none focus:border-indigo-500/50 transition-all min-h-[100px] resize-none"
+                                            placeholder="Example: I am a medical student. Please help me focus on memorization and summarizing complex topics..."
+                                            className="w-full bg-white/5 rounded-xl px-4 py-3 text-sm border border-white/5 outline-none focus:border-indigo-500/50 transition-all font-mono min-h-[100px] resize-y"
                                         />
                                         <p className="text-[10px] text-white/30 mt-1 pl-1">Tell the AI about your goals, habits, or role to get better help.</p>
                                     </div>
+                                </div>
+                            </div>
+
+                            {/* Data & Backup */}
+                            <div className="mb-8">
+                                <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-white/50 border-b border-white/10 pb-2">Data & Backup</h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button
+                                        onClick={handleExportSettings}
+                                        className="flex flex-col items-center justify-center gap-2 p-6 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/20 transition-all group"
+                                    >
+                                        <div className="p-3 rounded-full bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20 group-hover:scale-110 transition-all">
+                                            <Download size={24} />
+                                        </div>
+                                        <div className="text-center">
+                                            <span className="text-sm font-bold text-white block">Export Config</span>
+                                            <span className="text-[10px] text-white/40">Save settings to JSON</span>
+                                        </div>
+                                    </button>
+
+                                    <label className="flex flex-col items-center justify-center gap-2 p-6 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/20 transition-all group cursor-pointer">
+                                        <div className="p-3 rounded-full bg-purple-500/10 text-purple-400 group-hover:bg-purple-500/20 group-hover:scale-110 transition-all">
+                                            <UploadCloud size={24} />
+                                        </div>
+                                        <div className="text-center">
+                                            <span className="text-sm font-bold text-white block">Import Config</span>
+                                            <span className="text-[10px] text-white/40">Restore from JSON</span>
+                                        </div>
+                                        <input
+                                            type="file"
+                                            accept=".json"
+                                            className="hidden"
+                                            onChange={handleImportSettings}
+                                        />
+                                    </label>
                                 </div>
                             </div>
 
