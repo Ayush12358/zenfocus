@@ -10,9 +10,9 @@ import { GoogleTasksService } from '@/services/GoogleTasksService';
 import { useState, useEffect } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { Settings, History, Play, AlertCircle, Maximize, Minimize, Brain, Coffee, Zap, Link as LinkIcon, Trash2, Globe, Upload, ArrowUp, ArrowDown, MousePointer2, Lock, Sparkles, Key, Download, UploadCloud, CheckSquare, StickyNote } from 'lucide-react';
-import { Eye, EyeOff, Layers, Plus, Droplets, Bell, ArrowDownAZ} from 'lucide-react';
+import { Eye, EyeOff, Layers, Plus, Droplets, Bell, ArrowDownAZ } from 'lucide-react';
 
-const DEFAULT_VIDEO_ID = 'playlist:PL8ltyl0rAtoO4vZiGROGEflYt487oUJnA'; // Default Lofi Playlist
+const DEFAULT_VIDEO_ID = 'jfKfPfyJRdk'; // Lofi Girl
 
 interface QuickLink {
     id: string;
@@ -46,6 +46,7 @@ export default function SplitView() {
     const [modelName, setModelName] = useLocalStorage('zen_gemini_model', 'gemini-flash-lite-latest');
     const [googleClientId, setGoogleClientId] = useLocalStorage('zen_google_client_id', '');
     const [aiContext, setAiContext] = useLocalStorage('zen_ai_context', '');
+    const [autoplay, setAutoplay] = useLocalStorage('zen_video_autoplay', false); // Default to paused as requested
 
     useEffect(() => {
         if (googleClientId) {
@@ -265,7 +266,9 @@ export default function SplitView() {
             'zen_ui_hidden', 'zen_ui_orientation', 'zen_video_interactive', 'zen_show_tasks',
             'zen_show_notes', 'zen_gemini_api_key', 'zen_gemini_model', 'zen_google_client_id',
             'zen_quick_links', 'zen_timer_durations', 'zen_long_break_interval',
-            'zen_notifications_enabled', 'zen_ai_context', 'zen_tasks', 'zen_notes'
+            'zen_show_notes', 'zen_gemini_api_key', 'zen_gemini_model', 'zen_google_client_id',
+            'zen_quick_links', 'zen_timer_durations', 'zen_long_break_interval',
+            'zen_notifications_enabled', 'zen_ai_context', 'zen_tasks', 'zen_notes', 'zen_video_autoplay'
         ];
 
         const exportData: Record<string, any> = {};
@@ -357,8 +360,8 @@ export default function SplitView() {
                         : 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 min-w-full min-h-full w-[177.77vh] h-[56.25vw] pointer-events-none scale-[1.01]'
                         }`}
                     src={videoId.startsWith('playlist:')
-                        ? `https://www.youtube.com/embed?listType=playlist&list=${videoId.split(':')[1]}&autoplay=1&mute=0&controls=1&showinfo=0&rel=0&loop=1`
-                        : `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&controls=1&showinfo=0&rel=0&loop=1&playlist=${videoId}`
+                        ? `https://www.youtube.com/embed?listType=playlist&list=${videoId.split(':')[1]}&autoplay=${autoplay ? 1 : 0}&mute=0&controls=1&showinfo=0&rel=0&loop=1`
+                        : `https://www.youtube.com/embed/${videoId}?autoplay=${autoplay ? 1 : 0}&mute=0&controls=1&showinfo=0&rel=0&loop=1&playlist=${videoId}`
                     }
                     title="Background Video"
                     allow="autoplay; encrypted-media; loop"
@@ -865,6 +868,24 @@ export default function SplitView() {
                             {/* Video Settings */}
                             <div>
                                 <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-white/50 border-b border-white/10 pb-2">Background</h3>
+
+                                <div className="flex items-center justify-between bg-white/5 p-3 rounded-xl mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`p-2 rounded-lg ${autoplay ? 'bg-green-500/20 text-green-400' : 'bg-white/10 text-white/40'}`}>
+                                            <Play size={16} />
+                                        </div>
+                                        <div>
+                                            <div className="text-sm font-medium text-white/90">Autoplay Video</div>
+                                            <div className="text-[10px] text-white/40">Start video automatically on load</div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setAutoplay(!autoplay)}
+                                        className={`w-10 h-6 rounded-full transition-colors relative ${autoplay ? 'bg-green-500' : 'bg-white/10'}`}
+                                    >
+                                        <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${autoplay ? 'translate-x-4' : ''}`} />
+                                    </button>
+                                </div>
 
                                 <form onSubmit={handleUrlSubmit} className="flex flex-col gap-3">
                                     <div className="flex gap-3">

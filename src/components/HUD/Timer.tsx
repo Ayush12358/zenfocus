@@ -43,6 +43,7 @@ export default function Timer({ durations, longBreakInterval, notificationsEnabl
     });
 
     const [intentOptions] = useLocalStorage<string[]>('zen_current_intent_options', []);
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
 
 
@@ -362,33 +363,51 @@ export default function Timer({ durations, longBreakInterval, notificationsEnabl
                 <div className="flex flex-col gap-2">
                     <span className="text-[10px] uppercase tracking-wider font-bold text-white/20 pl-1">Intent</span>
                     <div className="relative group">
-                        <select
-                            value={stats.intent}
-                            onChange={(e) => setStats(s => ({ ...s, intent: e.target.value }))}
-                            className="w-full appearance-none bg-white/5 hover:bg-white/10 rounded-xl px-4 py-3 pr-10 text-sm text-white/90 outline-none border border-white/5 focus:border-white/20 transition-all font-medium cursor-pointer"
-                        >
-                            <option value="" className="bg-zinc-900 text-white/50">(No Intent Selected)</option>
-                            {intentOptions.length > 0 && (
-                                <optgroup label="Your Tasks" className="bg-zinc-900 text-white/40">
-                                    {intentOptions.map((opt, i) => (
-                                        <option key={i} value={opt} className="bg-zinc-900 text-white">
-                                            {opt}
-                                        </option>
-                                    ))}
-                                </optgroup>
-                            )}
-                            {stats.intent && !intentOptions.includes(stats.intent) && (
-                                <optgroup label="Custom" className="bg-zinc-900 text-white/40">
-                                    <option value={stats.intent} className="bg-zinc-900 text-white">
-                                        {stats.intent}
-                                    </option>
-                                </optgroup>
-                            )}
-                        </select>
-                        <ChevronDown
-                            size={14}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none group-hover:text-white/40 transition-colors"
-                        />
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="text"
+                                value={stats.intent}
+                                onChange={(e) => setStats(s => ({ ...s, intent: e.target.value }))}
+                                placeholder="What are you focusing on?"
+                                className="flex-1 bg-white/5 hover:bg-white/10 rounded-xl px-4 py-3 text-sm text-white/90 outline-none border border-white/5 focus:border-white/20 transition-all font-medium placeholder-white/20"
+                            />
+                            <button
+                                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                                className={`p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all ${isDropdownOpen ? 'bg-white/10 text-white' : 'text-white/40'}`}
+                            >
+                                <ChevronDown size={16} className={`transition-transform duration-300 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                            </button>
+                        </div>
+
+                        {/* Dropdown Menu */}
+                        {isDropdownOpen && (
+                            <div className="absolute top-full right-0 mt-2 w-full bg-zinc-900/90 backdrop-blur-xl border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50 max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:rounded-full">
+                                {intentOptions.length === 0 ? (
+                                    <div className="p-3 text-xs text-white/30 text-center italic">No active tasks found</div>
+                                ) : (
+                                    <div className="flex flex-col p-1">
+                                        <div className="text-[10px] uppercase font-bold text-white/20 px-3 py-2">Quick Select</div>
+                                        {intentOptions.map((opt, i) => (
+                                            <button
+                                                key={i}
+                                                onClick={() => {
+                                                    setStats(s => ({ ...s, intent: opt }));
+                                                    setIsDropdownOpen(false);
+                                                }}
+                                                className="text-left px-3 py-2 text-xs text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors truncate"
+                                            >
+                                                {opt}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Overlay to close dropdown on click outside */}
+                        {isDropdownOpen && (
+                            <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setIsDropdownOpen(false)} />
+                        )}
                     </div>
                 </div>
             </div>
