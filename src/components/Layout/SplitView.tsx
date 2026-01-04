@@ -9,7 +9,8 @@ import DraggablePanel from '@/components/Layout/DraggablePanel';
 import { GoogleTasksService } from '@/services/GoogleTasksService';
 import { useState, useEffect } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { CheckSquare, StickyNote, Settings, History, Play, AlertCircle, Maximize, Minimize, Brain, Coffee, Zap, Layers, Droplets, Link as LinkIcon, Plus, Trash2, Globe, ExternalLink, Upload, FileText, ArrowUp, ArrowDown, ArrowDownAZ, Bell, Eye, EyeOff, MousePointer2, Lock, Sparkles, Key, Download, UploadCloud } from 'lucide-react';
+import { Settings, History, Play, AlertCircle, Maximize, Minimize, Brain, Coffee, Zap, Link as LinkIcon, Trash2, Globe, Upload, ArrowUp, ArrowDown, MousePointer2, Lock, Sparkles, Key, Download, UploadCloud, CheckSquare, StickyNote } from 'lucide-react';
+import { Eye, EyeOff, Layers, Plus, Droplets, Bell, ArrowDownAZ} from 'lucide-react';
 
 const DEFAULT_VIDEO_ID = 'playlist:PL8ltyl0rAtoO4vZiGROGEflYt487oUJnA'; // Default Lofi Playlist
 
@@ -465,26 +466,6 @@ export default function SplitView() {
                                     <div className="h-4 w-px bg-white/10" />
 
                                     {/* App Links */}
-                                    <a
-                                        href="https://tasks.google.com/tasks/"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="p-2 hover:bg-white/10 rounded-xl transition-all group relative text-white/50 hover:text-white"
-                                        title="Google Tasks"
-                                    >
-                                        <CheckSquare size={20} />
-                                    </a>
-
-                                    <a
-                                        href="https://keep.google.com"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="p-2 hover:bg-white/10 rounded-xl transition-all group relative text-white/50 hover:text-white"
-                                        title="Google Keep"
-                                    >
-                                        <StickyNote size={20} />
-                                    </a>
-
                                     {/* Native Tools */}
                                     <div className="h-4 w-px bg-white/10" />
 

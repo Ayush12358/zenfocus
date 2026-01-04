@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { GripHorizontal } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 
 interface Position {

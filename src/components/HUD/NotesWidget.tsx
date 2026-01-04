@@ -1,7 +1,7 @@
 'use client';
 
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { StickyNote } from 'lucide-react';
+import { StickyNote, ExternalLink } from 'lucide-react';
 
 export default function NotesWidget() {
     const [notes, setNotes] = useLocalStorage('zen_notes', '');
@@ -12,6 +12,15 @@ export default function NotesWidget() {
                 <h3 className="text-sm font-bold uppercase tracking-wider text-white/50 flex items-center gap-2">
                     <StickyNote size={16} /> Notes
                 </h3>
+                <a
+                    href="https://keep.google.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-white/30 hover:text-yellow-400 transition-colors"
+                    title="Open Google Keep"
+                >
+                    <ExternalLink size={14} />
+                </a>
             </div>
 
             <textarea

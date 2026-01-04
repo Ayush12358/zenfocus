@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { ChevronDown, CheckSquare, Plus, Trash2, X, Cloud, CloudOff, LogIn, Loader2 } from 'lucide-react';
+import { ChevronDown, CheckSquare, Plus, Trash2, X, Cloud, CloudOff, LogIn, Loader2, ExternalLink } from 'lucide-react';
 import { GoogleTasksService } from '@/services/GoogleTasksService';
 
 interface Task {
@@ -198,14 +198,27 @@ export default function TasksWidget() {
                 )}
 
                 {googleClientId && (
-                    <button
-                        onClick={() => setUseGoogle(!useGoogle)}
-                        className={`text-[10px] uppercase font-bold tracking-wider flex items-center gap-1 transition-colors ${useGoogle ? 'text-blue-400' : 'text-white/30 hover:text-white'}`}
-                        title={useGoogle ? "Using Google Tasks" : "Using Local Storage"}
-                    >
-                        {useGoogle ? <Cloud size={12} /> : <CloudOff size={12} />}
-                        {useGoogle ? 'Cloud' : 'Local'}
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {useGoogle && (
+                            <a
+                                href="https://tasks.google.com/tasks/"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-white/30 hover:text-blue-400 transition-colors"
+                                title="Open Google Tasks"
+                            >
+                                <ExternalLink size={14} />
+                            </a>
+                        )}
+                        <button
+                            onClick={() => setUseGoogle(!useGoogle)}
+                            className={`text-[10px] uppercase font-bold tracking-wider flex items-center gap-1 transition-colors ${useGoogle ? 'text-blue-400' : 'text-white/30 hover:text-white'}`}
+                            title={useGoogle ? "Using Google Tasks" : "Using Local Storage"}
+                        >
+                            {useGoogle ? <Cloud size={12} /> : <CloudOff size={12} />}
+                            {useGoogle ? 'Cloud' : 'Local'}
+                        </button>
+                    </div>
                 )}
             </div>
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 
-import { Play, Pause, RotateCcw, Coffee, Brain, Zap, CheckCircle2, Volume2, VolumeX, ArrowRight, Sparkles, Loader2, ChevronDown } from 'lucide-react';
+import { Play, Pause, RotateCcw, Coffee, Brain, Zap, CheckCircle2, Volume2, VolumeX, ArrowRight, ChevronDown } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 
 
