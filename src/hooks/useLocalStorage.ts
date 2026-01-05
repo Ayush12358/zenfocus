@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export function useLocalStorage<T>(key: string, initialValue: T) {
     // State to store our value
@@ -21,39 +21,59 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
     });
 
     // Return a wrapped version of useState's setter function that ...
-    // ... persists the new value to localStorage.
+    // ... allows for functional updates and relies on useEffect for persistence.
     const setValue = (value: T | ((val: T) => T)) => {
-        try {
-            // Allow value to be a function so we have same API as useState
-            const valueToStore =
-                value instanceof Function ? value(storedValue) : value;
-            // Save state
-            setStoredValue(valueToStore);
-            // Save to local storage
-            if (typeof window !== 'undefined') {
-                window.localStorage.setItem(key, JSON.stringify(valueToStore));
-                // Dispatch a custom event so that the current tab also updates
-                // This is relevant if multiple components hook into the same key
-                window.dispatchEvent(new StorageEvent('storage', {
-                    key: key,
-                    newValue: JSON.stringify(valueToStore)
-                }));
-            }
-        } catch (error) {
-            // A more advanced implementation would handle the error case
-            console.log(error);
-        }
+        setStoredValue(value);
     };
 
+    // Keep a ref to the current value to avoid stale closures in the event listener
+    const storedValueRef = useRef(storedValue);
+    useEffect(() => {
+        storedValueRef.current = storedValue;
+    }, [storedValue]);
+
+    // Sync state to local storage whenever it changes
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                const valueToStore = JSON.stringify(storedValue);
+                // Only write if different from what's in LS?
+                // Actually, let's just write.
+                window.localStorage.setItem(key, valueToStore);
+                window.dispatchEvent(new StorageEvent('storage', {
+                    key: key,
+                    newValue: valueToStore
+                }));
+            } catch (error) {
+                console.log(error);
+            }
+        }
+    }, [storedValue, key]);
+
+    // Handle external storage events
     useEffect(() => {
         const handleStorageChange = (event: StorageEvent) => {
-            // console.log(`[useLocalStorage] Event received: key=${event.key} currentKey=${key}`);
             if (event.key === key && event.newValue) {
                 try {
-                    // console.log(`[useLocalStorage] Syncing value for ${key}:`, event.newValue);
-                    setStoredValue(JSON.parse(event.newValue));
+                    // Prevent circular updates: if the new value is identical to current state, ignore
+                    if (event.newValue === JSON.stringify(storedValueRef.current)) {
+                        return;
+                    }
+
+                    // Avoid infinite loop if the event was triggered by our own write above?
+                    // The event listener is on 'window', and StorageEvents from same page don't trigger usually,
+                    // BUT we are dispatching manually.
+                    // However, we check if newValue is different?
+                    // Actually, if we setStoredValue here, it might trigger the persistence effect again...
+
+                    const newValue = JSON.parse(event.newValue);
+                    // Simple equality check valid for primitives, costly for deep objects.
+                    // For now, let's trust React validation or just set it.
+                    // To avoid loops with manual dispatch, we might need a ref to track if WE triggered it.
+                    // But manual dispatch event.storageArea is null usually?
+
+                    setStoredValue(newValue);
                 } catch (error) {
-                    // Try using raw value if parse fails
                     setStoredValue(event.newValue as unknown as T);
                 }
             }

@@ -9,8 +9,11 @@ import DraggablePanel from '@/components/Layout/DraggablePanel';
 import { GoogleTasksService } from '@/services/GoogleTasksService';
 import { useState, useEffect } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { Settings, History, Play, AlertCircle, Maximize, Minimize, Brain, Coffee, Zap, Link as LinkIcon, Trash2, Globe, Upload, ArrowUp, ArrowDown, MousePointer2, Lock, Sparkles, Key, Download, UploadCloud, CheckSquare, StickyNote } from 'lucide-react';
-import { Eye, EyeOff, Layers, Plus, Droplets, Bell, ArrowDownAZ } from 'lucide-react';
+import { Eye, EyeOff, Plus, Droplets, Bell, ArrowDownAZ, UploadCloud, Speaker, ArrowUp, ArrowDown, MousePointer2, Lock, Sparkles, CheckSquare, StickyNote, Play, Pause, SkipBack, SkipForward, Settings, LinkIcon, AlertCircle, History, Layers, FolderOpen, Trash2, Upload, Key, Download, Minimize, Maximize, Maximize2, Brain, Coffee, Zap, Globe, Music, X, ToggleLeft, ToggleRight } from 'lucide-react';
+import { get, set } from 'idb-keyval';
+
+import YouTube, { YouTubeProps, YouTubePlayer } from 'react-youtube';
+import React from 'react';
 
 const DEFAULT_VIDEO_ID = 'jfKfPfyJRdk'; // Lofi Girl
 
@@ -37,7 +40,7 @@ export default function SplitView() {
 
     const [uiHidden, setUiHidden] = useLocalStorage('zen_ui_hidden', false);
     const [orientation, setOrientation] = useLocalStorage<'auto' | 'horizontal' | 'vertical'>('zen_ui_orientation', 'auto');
-    const [videoInteractive, setVideoInteractive] = useLocalStorage('zen_video_interactive', false);
+
     const [showTasks, setShowTasks] = useLocalStorage('zen_show_tasks', false);
     const [showNotes, setShowNotes] = useLocalStorage('zen_show_notes', false);
 
@@ -46,9 +49,60 @@ export default function SplitView() {
     const [modelName, setModelName] = useLocalStorage('zen_gemini_model', 'gemini-flash-lite-latest');
     const [googleClientId, setGoogleClientId] = useLocalStorage('zen_google_client_id', '');
     const [aiContext, setAiContext] = useLocalStorage('zen_ai_context', '');
-    const [autoplay, setAutoplay] = useLocalStorage('zen_video_autoplay', false); // Default to paused as requested
+    const [autoplay, setAutoplay] = useLocalStorage('zen_video_autoplay', false);
+    // Background Mode Split
+    // User wants: YouTube, Local Media (with Image/Audio/Video support).
+
+    // 1.  **State**:
+    const [backgroundMode, setBackgroundMode] = useLocalStorage<'youtube' | 'local_media'>('zen_background_mode', 'youtube');
+
+    // Local Media State (Session only)
+    const [localImage, setLocalImage] = useState<{ url: string; name: string } | null>(null);
+
+    // Initial Load for Image Persistence
+    useEffect(() => {
+        get('zen_background_image').then((file) => {
+            if (file) {
+                const url = URL.createObjectURL(file);
+                setLocalImage({ url, name: file.name || 'Saved Background' });
+            }
+        });
+    }, []);
+    const [playlist, setPlaylist] = useState<Array<{ url: string; type: 'video' | 'audio'; name: string }>>([]);
+    const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const mediaRef = React.useRef<HTMLMediaElement | null>(null);
+    const youTubeRef = React.useRef<YouTubePlayer | null>(null);
+
+    const [resumeHandleName, setResumeHandleName] = useState<string | null>(null);
 
     useEffect(() => {
+        // Check for saved playlist blobs
+        get('zen_local_playlist_files').then((savedFiles) => {
+            console.log("[Persistence] Checking IDB...", savedFiles);
+            if (savedFiles && Array.isArray(savedFiles) && savedFiles.length > 0) {
+                console.log(`[Persistence] Restoring ${savedFiles.length} files from IDB.`);
+                const reconstructedPlaylist = savedFiles.map((file: any) => {
+                    if (!file.blob) {
+                        console.error("[Persistence] Found entry without blob:", file);
+                        return null;
+                    }
+                    return {
+                        url: URL.createObjectURL(file.blob),
+                        type: file.type,
+                        name: file.name
+                    };
+                }).filter(Boolean) as Array<{ url: string; type: 'video' | 'audio'; name: string }>;
+
+                if (reconstructedPlaylist.length > 0) {
+                    setPlaylist(reconstructedPlaylist);
+                    setResumeHandleName(savedFiles.length > 1 ? `${savedFiles.length} Files Saved` : "Saved Session");
+                }
+            } else {
+                console.log("[Persistence] No saved playlist found.");
+            }
+        }).catch(err => console.error("[Persistence] Error loading saved playlist:", err));
+
         if (googleClientId) {
             GoogleTasksService.initClient(googleClientId).catch(console.error);
         }
@@ -81,6 +135,11 @@ export default function SplitView() {
         document.addEventListener('fullscreenchange', handleFullscreenChange);
         return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
     }, []);
+
+    // Sync Playback State on Mode Change
+    useEffect(() => {
+        setIsPlaying(false);
+    }, [backgroundMode]);
 
     const toggleFullscreen = () => {
         if (!document.fullscreenElement) {
@@ -120,8 +179,9 @@ export default function SplitView() {
 
         if (result) {
             if (result.type === 'playlist') {
-                setVideoId(`playlist:${result.id}`);
-                // Don't add playlists to history for now, or handle differently
+                const fullId = `playlist:${result.id}`;
+                setVideoId(fullId);
+                addToHistory(fullId);
             } else {
                 setVideoId(result.id);
                 addToHistory(result.id);
@@ -249,6 +309,190 @@ export default function SplitView() {
         e.target.value = '';
     };
 
+    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const url = URL.createObjectURL(file);
+        setLocalImage({ url, name: file.name });
+
+        // Auto-enable overlay when new image selected
+        setBackgroundMode('local_media');
+
+        // Persist
+        set('zen_background_image', file).catch(err => console.error("Failed to save image:", err));
+    };
+
+    const sortAndPlayFiles = (files: Array<{ url: string; type: 'video' | 'audio'; name: string }>) => {
+        files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+        setPlaylist(files);
+        setCurrentTrackIndex(0);
+        setBackgroundMode('local_media');
+    };
+
+    // Unified File Handler
+    const handleMediaSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files) return;
+
+        // Get existing blobs from IDB to append to
+        let currentBlobs: Array<{ name: string; type: 'video' | 'audio'; blob: Blob }> = [];
+        try {
+            const saved = await get('zen_local_playlist_files');
+            if (saved && Array.isArray(saved)) {
+                currentBlobs = saved;
+            }
+        } catch (err) {
+            console.error("Error retrieving existing playlist:", err);
+        }
+
+        const newMediaFiles: Array<{ url: string; type: 'video' | 'audio'; name: string }> = [];
+        const newBlobs: Array<{ name: string; type: 'video' | 'audio'; blob: Blob }> = [];
+
+        Array.from(files).forEach(file => {
+            if (file.type.startsWith('audio/') || file.type.startsWith('video/')) {
+                const type = file.type.startsWith('video/') ? 'video' : 'audio';
+                newMediaFiles.push({
+                    url: URL.createObjectURL(file), // For immediate playback
+                    type: type,
+                    name: file.name
+                });
+                newBlobs.push({
+                    name: file.name,
+                    type: type,
+                    blob: file // File is a Blob
+                });
+            }
+        });
+
+        if (newMediaFiles.length > 0) {
+            // Append to state
+            const updatedPlaylist = [...playlist, ...newMediaFiles];
+            setPlaylist(updatedPlaylist);
+
+            // Append to IDB
+            const updatedBlobs = [...currentBlobs, ...newBlobs];
+
+            set('zen_local_playlist_files', updatedBlobs).then(() => {
+                setResumeHandleName(updatedBlobs.length > 1 ? `${updatedBlobs.length} Files Saved` : "Saved Session");
+            }).catch(err => console.error("Failed to save playlist to IDB:", err));
+
+            setBackgroundMode('local_media');
+            if (playlist.length === 0) {
+                setCurrentTrackIndex(0);
+                setIsPlaying(true);
+            }
+        } else {
+            alert("No audio or video files found.");
+        }
+    };
+
+    const removeFromPlaylist = async (index: number) => {
+        // Update State
+        const newPlaylist = [...playlist];
+        newPlaylist.splice(index, 1);
+        setPlaylist(newPlaylist);
+
+        // Adjust current track index if needed
+        if (currentTrackIndex === index) {
+            setIsPlaying(false); // Stop if current is removed
+            if (newPlaylist.length > 0) {
+                setCurrentTrackIndex(index % newPlaylist.length);
+            }
+        } else if (currentTrackIndex > index) {
+            setCurrentTrackIndex(currentTrackIndex - 1);
+        }
+
+        // Update IDB
+        try {
+            const saved = await get('zen_local_playlist_files');
+            if (saved && Array.isArray(saved)) {
+                const newBlobs = [...saved];
+                newBlobs.splice(index, 1);
+                await set('zen_local_playlist_files', newBlobs);
+                setResumeHandleName(newBlobs.length > 0 ? (newBlobs.length > 1 ? `${newBlobs.length} Files Saved` : "Saved Session") : null);
+            }
+        } catch (err) {
+            console.error("Error removing file from IDB:", err);
+        }
+    };
+
+    const moveTrack = async (index: number, direction: 'up' | 'down') => {
+        if ((direction === 'up' && index === 0) || (direction === 'down' && index === playlist.length - 1)) return;
+
+        const newIndex = direction === 'up' ? index - 1 : index + 1;
+
+        // Swap in State
+        const newPlaylist = [...playlist];
+        [newPlaylist[index], newPlaylist[newIndex]] = [newPlaylist[newIndex], newPlaylist[index]];
+        setPlaylist(newPlaylist);
+
+        // Update Current Track Index if moved
+        if (currentTrackIndex === index) setCurrentTrackIndex(newIndex);
+        else if (currentTrackIndex === newIndex) setCurrentTrackIndex(index);
+
+        // Swap in IDB
+        try {
+            const saved = await get('zen_local_playlist_files');
+            if (saved && Array.isArray(saved)) {
+                const newBlobs = [...saved];
+                [newBlobs[index], newBlobs[newIndex]] = [newBlobs[newIndex], newBlobs[index]];
+                await set('zen_local_playlist_files', newBlobs);
+            }
+        } catch (err) {
+            console.error("Error reordering files in IDB:", err);
+        }
+    };
+
+    const clearPlaylist = async () => {
+        setPlaylist([]);
+        setResumeHandleName(null);
+        setIsPlaying(false);
+        try {
+            await set('zen_local_playlist_files', []);
+        } catch (err) {
+            console.error("Error clearing playlist:", err);
+        }
+    };
+
+    const togglePlay = () => {
+        if (backgroundMode === 'youtube' && youTubeRef.current) {
+            // YouTube Control
+            if (isPlaying) {
+                youTubeRef.current.pauseVideo();
+            } else {
+                youTubeRef.current.playVideo();
+            }
+        } else if (mediaRef.current) {
+            // Local Media Control
+            if (mediaRef.current.paused) {
+                mediaRef.current.play();
+                setIsPlaying(true);
+            } else {
+                mediaRef.current.pause();
+                setIsPlaying(false);
+            }
+        }
+    };
+
+    const playNext = () => {
+        if (backgroundMode === 'youtube') {
+            youTubeRef.current?.nextVideo();
+        } else {
+            setCurrentTrackIndex(prev => (prev + 1) % playlist.length);
+            setIsPlaying(true); // Auto-play on skip
+        }
+    };
+
+    const playPrevious = () => {
+        if (backgroundMode === 'youtube') {
+            youTubeRef.current?.previousVideo();
+        } else {
+            setCurrentTrackIndex(prev => (prev - 1 + playlist.length) % playlist.length);
+            setIsPlaying(true);
+        }
+    };
+
     const addToHistory = (id: string) => {
         if (!history.includes(id)) {
             const newHistory = [id, ...history].slice(0, 10);
@@ -263,7 +507,7 @@ export default function SplitView() {
     const handleExportSettings = () => {
         const EXPORT_KEYS = [
             'zen_video_id', 'zen_ui_transparency', 'zen_ui_blur', 'zen_ui_show_quicklinks',
-            'zen_ui_hidden', 'zen_ui_orientation', 'zen_video_interactive', 'zen_show_tasks',
+            'zen_ui_hidden', 'zen_ui_orientation', 'zen_show_media_controls', 'zen_show_tasks',
             'zen_show_notes', 'zen_gemini_api_key', 'zen_gemini_model', 'zen_google_client_id',
             'zen_quick_links', 'zen_timer_durations', 'zen_long_break_interval',
             'zen_show_notes', 'zen_gemini_api_key', 'zen_gemini_model', 'zen_google_client_id',
@@ -344,40 +588,85 @@ export default function SplitView() {
         };
     };
 
-
-
-    // Approximate default positions
     const initialHUDPos = { x: '50%', y: '50%' };
 
     return (
         <div className="h-[100dvh] w-screen bg-black overflow-hidden relative text-white flex flex-col lg:block overflow-y-auto lg:overflow-hidden">
             {/* Background Video */}
             <div className="absolute inset-0 z-0 bg-black flex items-center justify-center">
-                {/* 1. Underlying Iframe */}
-                <iframe
-                    className={`transition-all duration-700 ease-in-out ${videoInteractive
-                        ? 'w-full h-full pointer-events-auto scale-100 opacity-100'
-                        : 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 min-w-full min-h-full w-[177.77vh] h-[56.25vw] pointer-events-none scale-[1.01]'
-                        }`}
-                    src={videoId.startsWith('playlist:')
-                        ? `https://www.youtube.com/embed?listType=playlist&list=${videoId.split(':')[1]}&autoplay=${autoplay ? 1 : 0}&mute=0&controls=1&showinfo=0&rel=0&loop=1`
-                        : `https://www.youtube.com/embed/${videoId}?autoplay=${autoplay ? 1 : 0}&mute=0&controls=1&showinfo=0&rel=0&loop=1&playlist=${videoId}`
-                    }
-                    title="Background Video"
-                    allow="autoplay; encrypted-media; loop"
-                    allowFullScreen
-                />
+                {/* 1. Underlying Background (Video/Image) */}
+                {backgroundMode === 'youtube' && (
+                    <div className="absolute inset-0 pointer-events-none opacity-100">
+                        <YouTube
+                            videoId={videoId.startsWith('playlist:') ? undefined : videoId}
+                            opts={{
+                                height: '100%',
+                                width: '100%',
+                                playerVars: {
+                                    autoplay: autoplay ? 1 : 0,
+                                    controls: 0, // Hide native controls
+                                    showinfo: 0,
+                                    rel: 0,
+                                    loop: 1,
+                                    playlist: videoId.startsWith('playlist:') ? videoId.split(':')[1] : videoId,
+                                    listType: videoId.startsWith('playlist:') ? 'playlist' : undefined,
+                                    list: videoId.startsWith('playlist:') ? videoId.split(':')[1] : undefined,
+                                },
+                            }}
+                            className="w-full h-full transition-transform duration-1000 scale-[1.35]"
+                            iframeClassName="w-full h-full object-cover"
+                            onReady={(event) => {
+                                youTubeRef.current = event.target;
+                                if (autoplay) {
+                                    event.target.playVideo();
+                                }
+                            }}
+                            onStateChange={(event) => {
+                                // Sync state: 1 = Playing, 2 = Paused
+                                if (event.data === 1) setIsPlaying(true);
+                                if (event.data === 2) setIsPlaying(false);
+                            }}
+                        />
+                    </div>
+                )}
 
-                {/* 2. Interaction Capture Overlay (Only active when NOT interactive) */}
-                {!videoInteractive && (
-                    <div
-                        className="absolute inset-0 z-10 cursor-pointer pointer-events-auto hover:bg-white/5 transition-colors group flex items-center justify-center"
-                        onClick={() => setVideoInteractive(true)}
-                    >
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-xl px-6 py-3 rounded-2xl border border-white/10 flex items-center gap-3">
-                            <MousePointer2 size={20} className="text-white/70" />
-                            <span className="text-sm font-medium">Click to interact with video</span>
-                        </div>
+                {backgroundMode === 'local_media' && (
+                    <div className="absolute inset-0 z-0 bg-black">
+
+                        {/* Layer 1: Video Player */}
+                        {playlist.length > 0 && playlist[currentTrackIndex] && (
+                            <video
+                                ref={mediaRef as React.RefObject<HTMLVideoElement>}
+                                key={playlist[currentTrackIndex].url}
+                                src={playlist[currentTrackIndex].url}
+                                autoPlay={autoplay || isPlaying}
+                                muted={false}
+                                loop={false} // Handled by onEnded
+                                className="w-full h-full object-cover"
+                                onEnded={playNext}
+                                onPlay={() => setIsPlaying(true)}
+                                onPause={() => setIsPlaying(false)}
+                            />
+                        )}
+
+                        {/* Layer 2: Image Overlay (Show if Audio or No Media) */}
+                        {localImage && (playlist.length === 0 || playlist[currentTrackIndex]?.type === 'audio') && (
+                            <div className="absolute inset-0 z-10 animate-fade-in">
+                                <img src={localImage.url} alt="Background" className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-black/20" />
+                            </div>
+                        )}
+
+                        {/* Empty State */}
+                        {!localImage && playlist.length === 0 && (
+                            <div className="z-10 text-white/20 flex flex-col items-center gap-4">
+                                <div className="flex gap-4">
+                                    <UploadCloud size={32} />
+                                    <Maximize2 size={32} />
+                                </div>
+                                <p className="text-lg">Set Image or Media in Settings</p>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -385,7 +674,7 @@ export default function SplitView() {
                 <div className="absolute inset-0 bg-black/20 pointer-events-none z-20" />
             </div>
 
-            {/* Content Container */}
+            {/* Content Container Stub */}
             <div className="relative z-10 w-full min-h-[100dvh] flex flex-col items-center lg:block p-2 lg:p-0 pointer-events-none">
 
                 {/* Unified Zen Hub */}
@@ -447,14 +736,30 @@ export default function SplitView() {
                                         <Settings size={20} className={`transition-transform duration-500 ${showSettings ? 'rotate-90' : 'group-hover:rotate-45'}`} />
                                     </button>
 
-                                    {/* Video Interaction Toggle */}
-                                    <button
-                                        onClick={() => setVideoInteractive(!videoInteractive)}
-                                        className={`p-2 rounded-xl transition-all group relative ${videoInteractive ? 'bg-white/20 text-white shadow-lg' : 'hover:bg-white/10 text-white/50 hover:text-white'}`}
-                                        title={videoInteractive ? "Lock Video Focus" : "Unlock Video Focus"}
-                                    >
-                                        {videoInteractive ? <MousePointer2 size={20} /> : <Lock size={20} />}
-                                    </button>
+                                    {/* Media Controls (Inline) */}
+                                    <div className="flex items-center gap-1 bg-white/5 rounded-xl p-1 border border-white/5">
+                                        <button
+                                            onClick={playPrevious}
+                                            className="p-1.5 hover:bg-white/10 text-white/50 hover:text-white rounded-lg transition-colors"
+                                            title="Previous"
+                                        >
+                                            <SkipBack size={16} />
+                                        </button>
+                                        <button
+                                            onClick={togglePlay}
+                                            className="p-1.5 hover:bg-white/10 text-white/80 hover:text-white rounded-lg transition-colors"
+                                            title={isPlaying ? "Pause" : "Play"}
+                                        >
+                                            {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+                                        </button>
+                                        <button
+                                            onClick={playNext}
+                                            className="p-1.5 hover:bg-white/10 text-white/50 hover:text-white rounded-lg transition-colors"
+                                            title="Next"
+                                        >
+                                            <SkipForward size={16} />
+                                        </button>
+                                    </div>
 
                                     {/* Gemini Toggle (New) */}
                                     <button
@@ -515,6 +820,8 @@ export default function SplitView() {
                     )
                 }
 
+
+
                 {/* Floating Hide UI Toggle (Always available) */}
                 <div className={`fixed bottom-8 right-8 z-50 pointer-events-auto transition-all duration-500 ${uiHidden ? 'opacity-100' : 'opacity-40 hover:opacity-100'}`}>
                     <button
@@ -525,10 +832,6 @@ export default function SplitView() {
                         {uiHidden ? <Eye size={24} /> : <EyeOff size={24} />}
                     </button>
                 </div>
-
-
-
-
 
             </div >
 
@@ -725,7 +1028,7 @@ export default function SplitView() {
                                                                 <img
                                                                     src={`https://www.google.com/s2/favicons?domain=${link.url}&sz=32`}
                                                                     alt={link.title}
-                                                                    className="w-5 h-5 object-cover opacity-80"
+                                                                    className="w-full h-full object-cover opacity-80"
                                                                     onError={(e) => {
                                                                         (e.target as HTMLImageElement).style.display = 'none';
                                                                         (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
@@ -772,8 +1075,6 @@ export default function SplitView() {
                                     </div>
                                 </div>
                             </div>
-
-
 
                             {/* AI Settings */}
                             <div className="mb-8">
@@ -869,14 +1170,34 @@ export default function SplitView() {
                             <div>
                                 <h3 className="text-sm font-bold uppercase tracking-wider mb-4 text-white/50 border-b border-white/10 pb-2">Background</h3>
 
+                                {/* Mode Switcher */}
+                                <div className="flex bg-white/5 p-1 rounded-xl mb-6 gap-1">
+                                    <button
+                                        onClick={() => setBackgroundMode('youtube')}
+                                        className={`flex-1 py-3 text-xs font-medium rounded-lg transition-all flex flex-col items-center justify-center gap-1.5 ${backgroundMode === 'youtube' ? 'bg-indigo-600 text-white shadow-lg' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                                    >
+                                        <Play size={16} /> YouTube
+                                    </button>
+                                    <button
+                                        onClick={() => setBackgroundMode('local_media')}
+                                        className={`flex-1 py-3 text-xs font-medium rounded-lg transition-all flex flex-col items-center justify-center gap-1.5 ${backgroundMode === 'local_media' ? 'bg-purple-600 text-white shadow-lg' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                                    >
+                                        <div className="flex gap-1">
+                                            <UploadCloud size={14} />
+                                            <Maximize2 size={14} />
+                                        </div>
+                                        Image & Media
+                                    </button>
+                                </div>
+
                                 <div className="flex items-center justify-between bg-white/5 p-3 rounded-xl mb-4">
                                     <div className="flex items-center gap-3">
                                         <div className={`p-2 rounded-lg ${autoplay ? 'bg-green-500/20 text-green-400' : 'bg-white/10 text-white/40'}`}>
                                             <Play size={16} />
                                         </div>
                                         <div>
-                                            <div className="text-sm font-medium text-white/90">Autoplay Video</div>
-                                            <div className="text-[10px] text-white/40">Start video automatically on load</div>
+                                            <div className="text-sm font-medium text-white/90">Autoplay Media</div>
+                                            <div className="text-[10px] text-white/40">Start playback automatically</div>
                                         </div>
                                     </div>
                                     <button
@@ -887,60 +1208,196 @@ export default function SplitView() {
                                     </button>
                                 </div>
 
-                                <form onSubmit={handleUrlSubmit} className="flex flex-col gap-3">
-                                    <div className="flex gap-3">
-                                        <div className="relative flex-1">
-                                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30">
-                                                <LinkIcon size={16} />
-                                            </div>
-                                            <input
-                                                type="text"
-                                                value={inputUrl}
-                                                onChange={(e) => setInputUrl(e.target.value)}
-                                                placeholder="Paste YouTube Link..."
-                                                className="w-full bg-white/5 rounded-xl pl-12 pr-4 py-3 text-sm border border-white/5 outline-none focus:border-blue-500/50 transition-all placeholder-white/20"
-                                            />
-                                        </div>
-                                        <button
-                                            type="submit"
-                                            className="px-6 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                            disabled={!inputUrl.trim()}
-                                        >
-                                            Load Video
-                                        </button>
-                                    </div>
-                                    {error && <span className="text-xs text-red-400 flex items-center gap-2 pl-2"><AlertCircle size={12} /> {error}</span>}
-                                </form>
-
-                                {history.length > 0 && (
-                                    <div className="mt-4">
-                                        <div className="flex justify-between items-center mb-3 px-1">
-                                            <span className="text-xs font-bold text-white/40 uppercase tracking-wider flex items-center gap-2">
-                                                <History size={12} /> Recent History
-                                            </span>
-                                            <button onClick={clearHistory} className="text-[10px] text-red-400/60 hover:text-red-400 transition-colors">Clear All</button>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {history.slice(0, 4).map((id, index) => (
+                                {backgroundMode === 'youtube' && (
+                                    <>
+                                        <form onSubmit={handleUrlSubmit} className="flex flex-col gap-3">
+                                            <div className="flex gap-3">
+                                                <div className="relative flex-1">
+                                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30">
+                                                        <LinkIcon size={16} />
+                                                    </div>
+                                                    <input
+                                                        type="text"
+                                                        value={inputUrl}
+                                                        onChange={(e) => setInputUrl(e.target.value)}
+                                                        placeholder="Paste YouTube Link..."
+                                                        className="w-full bg-white/5 rounded-xl pl-12 pr-4 py-3 text-sm border border-white/5 outline-none focus:border-blue-500/50 transition-all placeholder-white/20"
+                                                    />
+                                                </div>
                                                 <button
-                                                    key={index}
-                                                    onClick={() => setVideoId(id)}
-                                                    className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all text-left group border border-transparent hover:border-white/5"
+                                                    type="submit"
+                                                    className="px-6 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    disabled={!inputUrl.trim()}
                                                 >
-                                                    <div className="w-10 h-10 rounded-lg bg-black/50 overflow-hidden relative shrink-0">
-                                                        <img src={`https://img.youtube.com/vi/${id}/default.jpg`} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" />
-                                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
-                                                            <div className="bg-black/50 p-2 rounded-full backdrop-blur-sm">
-                                                                <Play size={12} className="text-white fill-white translate-x-0.5" />
+                                                    Load Video
+                                                </button>
+                                            </div>
+                                            {error && <span className="text-xs text-red-400 flex items-center gap-2 pl-2"><AlertCircle size={12} /> {error}</span>}
+                                        </form>
+
+                                        {history.length > 0 && (
+                                            <div className="mt-4">
+                                                {/* History rendering */}
+                                                <div className="flex justify-between items-center mb-3 px-1">
+                                                    <span className="text-xs font-bold text-white/40 uppercase tracking-wider flex items-center gap-2">
+                                                        <History size={12} /> Recent History
+                                                    </span>
+                                                    <button onClick={clearHistory} className="text-[10px] text-red-400/60 hover:text-red-400 transition-colors">Clear All</button>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {history.slice(0, 4).map((id, index) => (
+                                                        <button
+                                                            key={index}
+                                                            onClick={() => setVideoId(id)}
+                                                            className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all text-left group border border-transparent hover:border-white/5"
+                                                        >
+                                                            <div className="w-10 h-10 rounded-lg bg-black/50 overflow-hidden relative shrink-0">
+                                                                <img src={`https://img.youtube.com/vi/${id}/default.jpg`} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" />
+                                                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+                                                                    <div className="bg-black/50 p-2 rounded-full backdrop-blur-sm">
+                                                                        <Play size={12} className="text-white fill-white translate-x-0.5" />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <div className="text-xs text-white/40 mb-0.5">YouTube Video</div>
+                                                                <div className="text-xs font-medium text-white/80 truncate">ID: {id}</div>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+
+                                {backgroundMode === 'local_media' && (
+                                    <div className="flex flex-col gap-4">
+
+                                        {/* Image Controls */}
+                                        <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col gap-4">
+
+                                            {/* Header */}
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2 text-blue-400">
+                                                    <UploadCloud size={18} />
+                                                    <span className="text-sm font-medium">Background Image</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Image Upload/Status */}
+                                            <div className="relative p-6 border border-dashed border-white/10 rounded-xl bg-black/20 hover:bg-black/40 transition-colors flex flex-col items-center justify-center gap-2 group">
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={handleImageSelect}
+                                                    className="absolute inset-0 opacity-0 cursor-pointer z-20"
+                                                />
+
+                                                {!localImage ? (
+                                                    <>
+                                                        <div className="p-3 bg-white/5 rounded-full text-white/40 group-hover:text-white group-hover:bg-white/10 transition-all">
+                                                            <Upload size={20} />
+                                                        </div>
+                                                        <span className="text-xs text-white/50 group-hover:text-white/80 transition-colors">Click to Upload Image</span>
+                                                    </>
+                                                ) : (
+                                                    <div className="w-full flex items-center gap-4 z-10">
+                                                        <div className="w-12 h-12 rounded-lg bg-cover bg-center shrink-0 border border-white/10" style={{ backgroundImage: `url(${localImage.url})` }} />
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="text-xs text-white/40">Active Image</div>
+                                                            <div className="text-sm text-white truncate">{localImage.name}</div>
+                                                        </div>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setLocalImage(null);
+                                                                set('zen_background_image', null); // Clear from IDB
+                                                            }}
+                                                            className="p-2 hover:bg-red-500/20 text-white/40 hover:text-red-400 rounded-lg z-30 transition-colors"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Divider */}
+                                        <div className="h-px bg-white/5 w-full" />
+
+                                        {/* Media Playlist Controls */}
+                                        <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col gap-4">
+                                            <div className="flex items-center gap-2 text-purple-400 mb-2">
+                                                <Maximize2 size={18} />
+                                                <span className="text-sm font-medium">Local Media Playlist</span>
+                                            </div>
+
+                                            <div className="flex flex-col items-center justify-center p-6 bg-black/20 rounded-xl border border-white/5 border-dashed relative">
+                                                {playlist.length === 0 ? (
+                                                    <>
+                                                        <div className="w-12 h-12 bg-purple-500/10 rounded-full flex items-center justify-center text-purple-400 mb-3 animate-bounce">
+                                                            <FolderOpen size={24} />
+                                                        </div>
+                                                        <div className="text-center mb-4">
+                                                            <h4 className="text-sm font-medium text-white mb-0.5">Select Video Files</h4>
+                                                            <p className="text-[10px] text-white/40">MP4, WEBM, MKV</p>
+                                                        </div>
+
+                                                        <div className="flex gap-2 w-full z-20">
+                                                            <div className="relative flex-1">
+                                                                <button className="flex items-center justify-center gap-2 w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-all text-xs font-medium">
+                                                                    <Layers size={14} /> Folder
+                                                                </button>
+                                                                {/* @ts-ignore */}
+                                                                <input type="file" {...{ "webkitdirectory": "", "directory": "" }} onChange={handleMediaSelect} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                                            </div>
+                                                            <div className="relative flex-1">
+                                                                <button className="flex items-center justify-center gap-2 w-full py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all text-xs font-medium border border-white/10">
+                                                                    <FolderOpen size={14} /> Files
+                                                                </button>
+                                                                <input type="file" multiple accept="video/*" onChange={handleMediaSelect} className="absolute inset-0 opacity-0 cursor-pointer" />
                                                             </div>
                                                         </div>
+                                                    </>
+                                                ) : (
+                                                    <div className="flex flex-col w-full">
+                                                        <div className="flex items-center justify-between mb-3">
+                                                            <div className="flex items-center gap-2 text-purple-400">
+                                                                <Maximize2 size={16} />
+                                                                <span className="text-xs font-bold uppercase tracking-wider">{playlist.length} Tracks</span>
+                                                            </div>
+                                                            <div className="flex gap-1">
+                                                                <div className="relative">
+                                                                    <div className="p-1.5 hover:bg-white/10 rounded cursor-pointer text-white/60 hover:text-white transition-colors">
+                                                                        <Plus size={14} />
+                                                                    </div>
+                                                                    <input type="file" multiple accept="video/*" onChange={handleMediaSelect} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                                                </div>
+                                                                <button onClick={clearPlaylist} className="p-1.5 hover:bg-red-500/20 rounded text-white/60 hover:text-red-400 transition-colors">
+                                                                    <Trash2 size={14} />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="w-full max-h-32 overflow-y-auto bg-black/20 rounded-lg p-2 text-xs space-y-1 custom-scrollbar">
+                                                            {playlist.map((track, i) => (
+                                                                <div key={i} className={`flex items-center gap-2 p-1.5 rounded group hover:bg-white/5 ${i === currentTrackIndex ? 'bg-white/10 text-white' : 'text-white/40'}`}>
+                                                                    {i === currentTrackIndex ? <Play size={10} className="fill-current shrink-0" /> : <span className="w-2.5 shrink-0" />}
+                                                                    <div className="flex-1 truncate cursor-pointer" onClick={() => { setCurrentTrackIndex(i); setIsPlaying(true); }}>
+                                                                        {track.name}
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        <button onClick={(e) => { e.stopPropagation(); moveTrack(i, 'up'); }} className="p-1 hover:text-white disabled:opacity-30" disabled={i === 0}><ArrowUp size={10} /></button>
+                                                                        <button onClick={(e) => { e.stopPropagation(); moveTrack(i, 'down'); }} className="p-1 hover:text-white disabled:opacity-30" disabled={i === playlist.length - 1}><ArrowDown size={10} /></button>
+                                                                        <button onClick={(e) => { e.stopPropagation(); removeFromPlaylist(i); }} className="p-1 hover:text-red-400"><X size={10} /></button>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
                                                     </div>
-                                                    <div className="min-w-0">
-                                                        <div className="text-xs text-white/40 mb-0.5">YouTube Video</div>
-                                                        <div className="text-xs font-medium text-white/80 truncate">ID: {id}</div>
-                                                    </div>
-                                                </button>
-                                            ))}
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -959,8 +1416,8 @@ export default function SplitView() {
                                     </span>
                                 </div>
                             </div>
-                        </div>
-                    </div>
+                        </div >
+                    </div >
                 )
             }
             <GeminiChat isOpen={showGeminiChat} onClose={() => setShowGeminiChat(false)} />

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Send, Sparkles, X, ChevronUp, ChevronDown, User, Bot, Maximize2, Minimize2, Plus, Trash2 } from 'lucide-react';
+import { Send, Sparkles, X, ChevronUp, ChevronDown, Maximize2, Minimize2, Plus, Trash2 } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { GoogleTasksService } from '@/services/GoogleTasksService';
 import ReactMarkdown from 'react-markdown';
@@ -299,14 +299,8 @@ export default function GeminiChat({ isOpen, onClose }: GeminiChatProps) {
                 {/* Header */}
                 <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-300 shadow-inner">
-                            <Bot size={24} />
-                        </div>
                         <div>
-                            <div className="text-lg font-bold text-white tracking-tight">Focus Partner</div>
-                            <div className="text-[10px] text-green-400 font-mono tracking-wider flex items-center gap-1.5 uppercase font-semibold">
-                                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(74,222,128,0.5)]" /> Ready to Help
-                            </div>
+                            <div className="text-lg font-bold text-white tracking-tight">AI Assistant</div>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -333,13 +327,10 @@ export default function GeminiChat({ isOpen, onClose }: GeminiChatProps) {
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth" ref={scrollRef}>
                     {messages.map((m, i) => (
-                        <div key={i} className={`flex gap-4 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 shadow-lg ${m.role === 'user' ? 'bg-white text-black' : 'bg-indigo-600 text-white'}`}>
-                                {m.role === 'user' ? <User size={16} /> : <Bot size={16} />}
-                            </div>
-                            <div className={`p-4 rounded-2xl text-sm leading-relaxed max-w-[85%] shadow-md ${m.role === 'user'
-                                ? 'bg-white text-black rounded-tr-none'
-                                : 'bg-white/10 text-white/90 rounded-tl-none border border-white/5'
+                        <div key={i} className={`flex gap-2 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                            <div className={`px-4 py-2 rounded-xl text-sm leading-relaxed max-w-[85%] ${m.role === 'user'
+                                ? 'bg-white/10 text-white'
+                                : 'text-white/80'
                                 }`}>
                                 <div className="prose prose-invert prose-sm max-w-none">
                                     <ReactMarkdown
@@ -361,14 +352,11 @@ export default function GeminiChat({ isOpen, onClose }: GeminiChatProps) {
                         </div>
                     ))}
                     {isLoading && (
-                        <div className="flex gap-4">
-                            <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shrink-0 shadow-lg glow-indigo">
-                                <Bot size={16} />
-                            </div>
-                            <div className="bg-white/5 p-4 rounded-2xl rounded-tl-none flex gap-1 items-center border border-white/5">
-                                <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" />
-                                <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0.2s]" />
-                                <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0.4s]" />
+                        <div className="flex gap-2">
+                            <div className="px-4 py-2 text-white/50 text-sm flex gap-1 items-center">
+                                <span className="w-1 h-1 bg-white/50 rounded-full animate-bounce" />
+                                <span className="w-1 h-1 bg-white/50 rounded-full animate-bounce [animation-delay:0.2s]" />
+                                <span className="w-1 h-1 bg-white/50 rounded-full animate-bounce [animation-delay:0.4s]" />
                             </div>
                         </div>
                     )}
