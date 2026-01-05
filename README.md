@@ -10,28 +10,32 @@ ZenFocus is a **Minimalist "Heads-Up Display" (HUD)** designed to help you enter
 ### Advanced Pomodoro Timer
 - **Circular Visuals:** Beautiful, animated progress ring.
 - **Flow State Tools:** "Focus Intent" input (`I am focusing on...`) to anchor your attention.
-- **Smart Breaks:** Configurable "Long Break" interval (e.g., after 4 sessions).
-- **Audio Feedback:** Subtle sounds for start, stop, and completion.
+- **Smart Breaks:** Configurable "Long Break" interval.
 - **Background Integrity:** Works perfectly even when the tab is inactive.
 
 ### Cinematic Atmosphere
-- **Ambient Video:** Defaults to a curated Lofi Hip Hop playlist (YouTube).
-- **Playlist Support:** Paste any YouTube Playlist URL to loop your own vibes.
-- **Glassmorphism:** Premium frosted glass UI that blends into the background.
+- **Curated Recommendations:** One-click access to **Lofi Girl**, **Puuung**, and **Nature** streams.
+- **Local Playlist Support:** Drag & Drop a folder of music/videos.
+    - **Offline Storage:** Files are saved locally (IndexedDB) and restore instantly on reload.
+    - **Folder Playback:** Automatically creates a playlist from all media in a folder.
+- **Dual Modes:**
+    - **YouTube Mode:** Stream online content with history tracking.
+    - **Local Media Mode:** Play your own MP3/MP4 collection offline.
 
 ### Full PWA Support
-- **Installable:** Works as a standalone desktop application (Mac/Windows/Linux).
-- **Offline Capable:** Loads instantly even without an internet connection.
-- **Notifications:** Desktop alerts for timer completion.
+- **Installable:** Works as a native desktop application (Mac/Windows/Linux).
+- **100% Offline Capable:** The app shell And your local playlists work without internet.
+- **Service Worker:** Automatic caching for reliable performance.
 
 ### Smart Integration
+- **Media Player Widget:** Draggable, persistent controls for your local playlists.
 - **Quick Links:** Customizable dock for your most-used sites.
-- **Embedded Tools:** Direct access to Google Tasks and Google Keep via smart links.
+- **Data Backup:** Export/Import your entire configuration (JSON) to save your setup.
 
 ## Getting Started
 
 ### Option 1: The Easy Way (Install)
-1. Open the deployed application (Link coming soon).
+1. Open the deployed application.
 2. Click the **Install** icon in your browser's address bar.
 3. Launch **ZenFocus** from your desktop or dock.
 
@@ -60,6 +64,7 @@ npm start
 - **Framer Motion** (Animations)
 - **Lucide React** (Icons)
 - **PWA** via `@ducanh2912/next-pwa`
+- **IndexedDB** (`idb-keyval`) for local file persistence
 
 ## Integration Guide
 Want to plug ZenFocus into another app? You have two options:
@@ -67,14 +72,8 @@ Want to plug ZenFocus into another app? You have two options:
 ### Option A: The "Component" Method (Next.js / React)
 Best for deep integration.
 1.  Copy the `src/components` folder to your project.
-2.  Install dependencies: `npm install framer-motion lucide-react date-fns`.
-3.  Import and use the `SplitView` component:
-    ```tsx
-    import SplitView from '@/components/Layout/SplitView';
-    export default function FocusPage() {
-      return <SplitView />;
-    }
-    ```
+2.  Install dependencies: `npm install framer-motion lucide-react date-fns idb-keyval`.
+3.  Import and use the `SplitView` component.
 
 ### Option B: The "Iframe" Method (Any Stack)
 Best for quick setup. Deploy ZenFocus (e.g., to Vercel) and embed it:
