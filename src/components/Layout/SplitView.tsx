@@ -10,12 +10,39 @@ import { GoogleTasksService } from '@/services/GoogleTasksService';
 import { useState, useEffect } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { Eye, EyeOff, Plus, Droplets, Bell, ArrowDownAZ, UploadCloud, Speaker, ArrowUp, ArrowDown, MousePointer2, Lock, Sparkles, CheckSquare, StickyNote, Play, Pause, SkipBack, SkipForward, Settings, LinkIcon, AlertCircle, History, Layers, FolderOpen, Trash2, Upload, Key, Download, Minimize, Maximize, Maximize2, Brain, Coffee, Zap, Globe, Music, X, ToggleLeft, ToggleRight } from 'lucide-react';
-import { get, set } from 'idb-keyval';
+import { get, set, del } from 'idb-keyval';
 
 import YouTube, { YouTubeProps, YouTubePlayer } from 'react-youtube';
 import React from 'react';
 
 const DEFAULT_VIDEO_ID = 'jfKfPfyJRdk'; // Lofi Girl
+
+const RECOMMENDED_VIDEOS = [
+    {
+        id: 'jfKfPfyJRdk',
+        title: 'Lofi Girl - Live',
+        category: 'Lofi',
+        thumbnailId: 'jfKfPfyJRdk'
+    },
+    {
+        id: 'playlist:PL8ltyl0rAtoO4vZiGROGEflYt487oUJnA',
+        title: 'Puuung - Loop Animation',
+        category: 'ASMR',
+        thumbnailId: 'tNkZsRW7h2c' // Space Ambient (visual loop)
+    },
+    {
+        id: 'playlist:PLT2SxfOu0NtRzJ_HfgI4zIN-RfO6jvc1j',
+        title: 'MONOMAN - Meditation Music',
+        category: 'Ambient',
+        thumbnailId: 'VNu15Qqomt8' // American Nature Relaxation Film (Verified)
+    },
+    {
+        id: 'playlist:PL8ltyl0rAtoOUWE4H8a1XnrHq8WqI0GHN',
+        title: 'Puuung - Healing animation with music',
+        category: 'Relaxing',
+        thumbnailId: 'DWcJFNfaw9c' // Lofi Girl Sleep Stream (Verified)
+    }
+];
 
 interface QuickLink {
     id: string;
@@ -59,7 +86,7 @@ export default function SplitView() {
     // Local Media State (Session only)
     const [localImage, setLocalImage] = useState<{ url: string; name: string } | null>(null);
 
-    // Initial Load for Image Persistence
+    // Initial Load for Image Persistence & Cleanup
     useEffect(() => {
         get('zen_background_image').then((file) => {
             if (file) {
@@ -68,7 +95,30 @@ export default function SplitView() {
             }
         });
     }, []);
+
+    // Cleanup Local Image Memory
+    useEffect(() => {
+        return () => {
+            if (localImage) {
+                URL.revokeObjectURL(localImage.url);
+            }
+        };
+    }, [localImage]);
     const [playlist, setPlaylist] = useState<Array<{ url: string; type: 'video' | 'audio'; name: string }>>([]);
+
+    // Ref to track playlist for unmount cleanup
+    const playlistRef = React.useRef(playlist);
+    useEffect(() => {
+        playlistRef.current = playlist;
+    }, [playlist]);
+
+    // Cleanup Playlist Memory on Unmount
+    useEffect(() => {
+        return () => {
+            playlistRef.current.forEach(file => URL.revokeObjectURL(file.url));
+        };
+    }, []);
+
     const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
     const mediaRef = React.useRef<HTMLMediaElement | null>(null);
@@ -79,12 +129,9 @@ export default function SplitView() {
     useEffect(() => {
         // Check for saved playlist blobs
         get('zen_local_playlist_files').then((savedFiles) => {
-            console.log("[Persistence] Checking IDB...", savedFiles);
             if (savedFiles && Array.isArray(savedFiles) && savedFiles.length > 0) {
-                console.log(`[Persistence] Restoring ${savedFiles.length} files from IDB.`);
                 const reconstructedPlaylist = savedFiles.map((file: any) => {
                     if (!file.blob) {
-                        console.error("[Persistence] Found entry without blob:", file);
                         return null;
                     }
                     return {
@@ -98,8 +145,6 @@ export default function SplitView() {
                     setPlaylist(reconstructedPlaylist);
                     setResumeHandleName(savedFiles.length > 1 ? `${savedFiles.length} Files Saved` : "Saved Session");
                 }
-            } else {
-                console.log("[Persistence] No saved playlist found.");
             }
         }).catch(err => console.error("[Persistence] Error loading saved playlist:", err));
 
@@ -388,6 +433,11 @@ export default function SplitView() {
     };
 
     const removeFromPlaylist = async (index: number) => {
+        // Revoke URL for the removed item
+        if (playlist[index]) {
+            URL.revokeObjectURL(playlist[index].url);
+        }
+
         // Update State
         const newPlaylist = [...playlist];
         newPlaylist.splice(index, 1);
@@ -445,14 +495,27 @@ export default function SplitView() {
     };
 
     const clearPlaylist = async () => {
+        // Revoke all URLs to prevent memory leaks
+        playlist.forEach(file => URL.revokeObjectURL(file.url));
         setPlaylist([]);
         setResumeHandleName(null);
         setIsPlaying(false);
         try {
-            await set('zen_local_playlist_files', []);
+            await del('zen_local_playlist_files');
         } catch (err) {
             console.error("Error clearing playlist:", err);
         }
+    };
+
+    const clearAllMedia = async () => {
+        // Clear Image
+        if (localImage) {
+            URL.revokeObjectURL(localImage.url);
+            setLocalImage(null);
+            await del('zen_background_image');
+        }
+        // Clear Playlist
+        await clearPlaylist();
     };
 
     const togglePlay = () => {
@@ -507,12 +570,11 @@ export default function SplitView() {
     const handleExportSettings = () => {
         const EXPORT_KEYS = [
             'zen_video_id', 'zen_ui_transparency', 'zen_ui_blur', 'zen_ui_show_quicklinks',
-            'zen_ui_hidden', 'zen_ui_orientation', 'zen_show_media_controls', 'zen_show_tasks',
-            'zen_show_notes', 'zen_gemini_api_key', 'zen_gemini_model', 'zen_google_client_id',
+            'zen_ui_hidden', 'zen_ui_orientation', 'zen_show_tasks', 'zen_show_notes',
+            'zen_gemini_api_key', 'zen_gemini_model', 'zen_google_client_id',
             'zen_quick_links', 'zen_timer_durations', 'zen_long_break_interval',
-            'zen_show_notes', 'zen_gemini_api_key', 'zen_gemini_model', 'zen_google_client_id',
-            'zen_quick_links', 'zen_timer_durations', 'zen_long_break_interval',
-            'zen_notifications_enabled', 'zen_ai_context', 'zen_tasks', 'zen_notes', 'zen_video_autoplay'
+            'zen_notifications_enabled', 'zen_ai_context', 'zen_tasks', 'zen_notes',
+            'zen_video_autoplay', 'zen_background_mode'
         ];
 
         const exportData: Record<string, any> = {};
@@ -1265,9 +1327,46 @@ export default function SplitView() {
                                                             </div>
                                                         </button>
                                                     ))}
+
                                                 </div>
                                             </div>
                                         )}
+
+                                        {/* Recommended Videos */}
+                                        <div className="mt-6">
+                                            <div className="text-xs font-bold text-white/40 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                                <Sparkles size={12} /> Recommended
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {RECOMMENDED_VIDEOS.map((video) => (
+                                                    <button
+                                                        key={video.id}
+                                                        onClick={() => {
+                                                            setVideoId(video.id);
+                                                            if (video.id.startsWith('playlist:')) {
+                                                                addToHistory(video.id);
+                                                            } else {
+                                                                addToHistory(video.id);
+                                                            }
+                                                        }}
+                                                        className="flex items-center gap-3 p-2 hover:bg-white/5 rounded-xl transition-all text-left group border border-transparent hover:border-white/5"
+                                                    >
+                                                        <div className="w-10 h-10 rounded-lg bg-black/50 overflow-hidden relative shrink-0">
+                                                            <img
+                                                                src={`https://img.youtube.com/vi/${video.thumbnailId || (video.id.startsWith('playlist:') ? 'jfKfPfyJRdk' : video.id)}/hqdefault.jpg`}
+                                                                // Fix: I will update the constant to include a `thumbnail` field (video id for thumbnail).
+                                                                alt={video.title}
+                                                                className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity"
+                                                            />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <div className="text-[10px] text-white/40 mb-0.5">{video.category}</div>
+                                                            <div className="text-xs font-medium text-white/80 truncate">{video.title}</div>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
                                     </>
                                 )}
 
@@ -1312,7 +1411,7 @@ export default function SplitView() {
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 setLocalImage(null);
-                                                                set('zen_background_image', null); // Clear from IDB
+                                                                del('zen_background_image'); // Clear from IDB
                                                             }}
                                                             className="p-2 hover:bg-red-500/20 text-white/40 hover:text-red-400 rounded-lg z-30 transition-colors"
                                                         >
@@ -1398,6 +1497,14 @@ export default function SplitView() {
                                                     </div>
                                                 )}
                                             </div>
+                                        </div>
+                                        <div className="w-full">
+                                            <button
+                                                onClick={clearAllMedia}
+                                                className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl border border-red-500/10 hover:border-red-500/30 transition-all flex items-center justify-center gap-2 text-xs font-medium group"
+                                            >
+                                                <Trash2 size={16} className="group-hover:scale-110 transition-transform" /> Delete All Media
+                                            </button>
                                         </div>
                                     </div>
                                 )}
